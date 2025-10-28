@@ -1,0 +1,93 @@
+## COMMERCIAL SELLABILITY (Objective Market Criteria)
+Rate based on documented buyer preferences:
+
+Market-Proven Factors (what actually sells):
+- Subject clarity: Is the subject immediately identifiable in 2 seconds?
+- "Living room test": Would this look good above a couch?
+- Emotional response: Calm/peaceful scores highest, followed by awe/wonder
+- Color preferences: 
+  * Blues and greens (highest sales)
+  * Warm sunsets (consistent sellers)
+  * Monochrome (niche but devoted market)
+  * High saturation without garishness
+- Composition simplicity: Single clear focal point outperforms complex compositions
+- Golden hour lighting: 3x more likely to sell than midday
+- Wildlife with eye contact: 5x higher sale rate
+- Misty/foggy atmospherics: Strong seller in fine art market
+- Negative space: At least 30% for text overlay potential
+- Horizontal orientation: Outsells vertical 2:1 for large prints
+
+Deductions for:
+- Abstract compositions requiring explanation
+- Dark/moody without clear subject (-2 points)
+- Technical imperfections visible at print size (-3 points)
+- Oversaturated subjects (waterfalls, autumn leaves) (-2 points)
+- Requires specific cultural knowledge to appreciate (-1 point)
+```
+
+### For Artistic Merit - Baseline Framework
+
+Start with established artistic principles, which gives you language to later say "I value X more than the standard framework suggests":
+```
+## ARTISTIC MERIT (Baseline Artistic Principles)
+Rate using established photographic art criteria:
+
+Traditional Artistic Values:
+- Originality: Has this perspective been seen 1000 times?
+- Emotional resonance: Does it evoke rather than just document?
+- Technical mastery AS expression (not just competence)
+- Visual metaphor and symbolism
+- Cohesive style and vision
+- Intentionality: Every element serves purpose
+
+Contemporary Artistic Values:
+- Challenges conventional beauty
+- Environmental storytelling
+- Minimalism and reduction
+- Process innovation (ICM, multiple exposure, etc.)
+- Series potential: Part of larger body of work?
+- Conceptual depth beyond surface beauty
+
+Note which elements present:
+[ ] Transcends documentation
+[ ] Creates mood/atmosphere
+[ ] Shows unique perspective
+[ ] Demonstrates technical innovation
+[ ] Tells story without words
+[ ] Questions rather than answers
+[ ] Shows restraint/editing choices
+```
+
+### Why This Separation Works Better
+
+**Commercial stays objective** because:
+- You need to know what the market actually wants, not what you wish it wanted
+- Your business decisions should be based on data, not hopes
+- You can choose to ignore market preferences, but you should know what they are
+
+**Artistic baseline helps you** because:
+- You'll identify which "standard" criteria you actively reject vs embrace
+- You'll develop vocabulary for your own criteria
+- You'll see patterns in where your vision diverges from convention
+
+### Suggested Testing Protocol
+
+1. **Run 50 images through the objective prompt**
+2. **Track where you disagree** with categories like:
+   - "Rated high artistic but I think it's derivative"
+   - "Rated low commercial but I know this would sell"
+   - "Missed the intentional softness as artistic choice"
+
+3. **Identify your divergence patterns**:
+   - "I consistently value mood over sharpness"
+   - "I find traditional sunset shots artistically void regardless of execution"
+   - "My commercial instincts for Virginia buyers differ from national trends"
+
+4. **THEN build your personalized artistic criteria** like:
+```
+   Konrad's Artistic Values:
+   - Softness as emotional tool: +2
+   - Blue-shifted color grading: +1
+   - Showing familiar subjects unfamiliarly: +3
+   - Technical perfection: 0 (neutral, not negative)
+   - Asks questions vs provides answers: +2

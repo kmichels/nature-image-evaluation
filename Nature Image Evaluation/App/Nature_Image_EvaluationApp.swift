@@ -12,6 +12,13 @@ import CoreData
 struct Nature_Image_EvaluationApp: App {
     let persistenceController = PersistenceController.shared
 
+    init() {
+        // Migration disabled for fresh programmatic model
+        // DataMigrationHelper.shared.runFullMigration(
+        //     context: persistenceController.container.viewContext
+        // )
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

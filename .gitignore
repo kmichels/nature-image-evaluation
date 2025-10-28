@@ -1,0 +1,26 @@
+# Xcode
+xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+project.xcworkspace/xcuserdata/
+
+# macOS
+.DS_Store
+
+# Build
+build/
+DerivedData/
+
+# Documentation (except README)
+*.md
+!README.md
+
+# Claude Code
+.claude/settings.local.json
+
+# API Keys (never commit)
+*.key
+*.pem
+*_key.txt
+anthropic_api_key*
+openai_api_key*
