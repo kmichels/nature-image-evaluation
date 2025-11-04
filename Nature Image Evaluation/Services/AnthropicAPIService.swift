@@ -114,6 +114,13 @@ final class AnthropicAPIService: APIProviderProtocol {
             technicalInnovations: evaluationData.technicalInnovations,
             printSizeRecommendation: evaluationData.printSizeRecommendation,
             priceTierSuggestion: evaluationData.priceTierSuggestion,
+            title: evaluationData.title,
+            descriptionText: evaluationData.description,
+            keywords: evaluationData.keywords,
+            altText: evaluationData.altText,
+            suggestedCategories: evaluationData.suggestedCategories,
+            bestUseCases: evaluationData.bestUseCases,
+            suggestedPriceTier: evaluationData.suggestedPriceTier,
             inputTokens: anthropicResponse.usage.inputTokens,
             outputTokens: anthropicResponse.usage.outputTokens,
             rawResponse: content
@@ -232,13 +239,19 @@ final class AnthropicAPIService: APIProviderProtocol {
 
     private func parseEvaluationJSON(from content: String) throws -> EvaluationData {
         // Find JSON content in the response (might be wrapped in markdown)
-        let jsonPattern = #"\{[^}]*\}"#
+        // Updated pattern to handle nested objects properly
+        let jsonPattern = #"\{[\s\S]*\}"#
         guard let range = content.range(of: jsonPattern, options: .regularExpression),
               let jsonData = String(content[range]).data(using: .utf8) else {
             throw APIError.parsingFailed("Could not extract JSON from response")
         }
 
-        return try decoder.decode(EvaluationData.self, from: jsonData)
+        do {
+            return try decoder.decode(EvaluationData.self, from: jsonData)
+        } catch {
+            print("❌ Failed to decode JSON: \(error)")
+            throw APIError.parsingFailed("JSON decoding failed: \(error)")
+        }
     }
 }
 
@@ -345,6 +358,15 @@ private struct EvaluationData: Decodable {
     let printSizeRecommendation: String?
     let priceTierSuggestion: String?
 
+    // Commercial metadata (optional, for STORE/BOTH placement)
+    let title: String?
+    let description: String?
+    let keywords: [String]?
+    let altText: String?
+    let suggestedCategories: [String]?
+    let bestUseCases: [String]?
+    let suggestedPriceTier: String?
+
     enum CodingKeys: String, CodingKey {
         case compositionScore = "composition_score"
         case qualityScore = "quality_score"
@@ -358,5 +380,12 @@ private struct EvaluationData: Decodable {
         case technicalInnovations = "technical_innovations"
         case printSizeRecommendation = "print_size_recommendation"
         case priceTierSuggestion = "price_tier_suggestion"
+        case title
+        case description
+        case keywords
+        case altText = "alt_text"
+        case suggestedCategories = "suggested_categories"
+        case bestUseCases = "best_use_cases"
+        case suggestedPriceTier = "suggested_price_tier"
     }
 }

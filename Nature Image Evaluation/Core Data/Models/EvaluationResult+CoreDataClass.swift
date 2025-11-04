@@ -39,6 +39,15 @@ extension EvaluationResult {
     @NSManaged public var printSizeRecommendation: String?
     @NSManaged public var priceTierSuggestion: String?
 
+    // SEO and Commerce Metadata (NEW)
+    @NSManaged public var title: String?
+    @NSManaged public var descriptionText: String?
+    @NSManaged public var keywords: [String]?
+    @NSManaged public var altText: String?
+    @NSManaged public var suggestedCategories: [String]?
+    @NSManaged public var bestUseCases: [String]?
+    @NSManaged public var suggestedPriceTier: String?
+
     // API Metadata
     @NSManaged public var inputTokens: Int32
     @NSManaged public var outputTokens: Int32

@@ -60,6 +60,17 @@ struct EvaluationResponse {
     let technicalInnovations: [String]?
     let printSizeRecommendation: String?
     let priceTierSuggestion: String?
+
+    // Commercial metadata (for STORE or BOTH placement)
+    let title: String?
+    let descriptionText: String?
+    let keywords: [String]?
+    let altText: String?
+    let suggestedCategories: [String]?
+    let bestUseCases: [String]?
+    let suggestedPriceTier: String?
+
+    // API usage
     let inputTokens: Int
     let outputTokens: Int
     let rawResponse: String

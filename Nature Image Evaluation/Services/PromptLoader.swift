@@ -26,6 +26,19 @@ final class PromptLoader {
             return cached
         }
 
+        // Try v2 prompt first
+        if let url = Bundle.main.url(forResource: "evaluation_prompt_v2", withExtension: "txt") {
+            do {
+                let prompt = try String(contentsOf: url, encoding: .utf8)
+                cachedEvaluationPrompt = prompt
+                print("📝 Using evaluation_prompt_v2.txt")
+                return prompt
+            } catch {
+                print("Error loading evaluation_prompt_v2: \(error)")
+            }
+        }
+
+        // Fall back to original prompt
         guard let url = Bundle.main.url(
             forResource: Constants.evaluationPromptFile,
             withExtension: "txt"
@@ -37,6 +50,7 @@ final class PromptLoader {
         do {
             let prompt = try String(contentsOf: url, encoding: .utf8)
             cachedEvaluationPrompt = prompt
+            print("📝 Using evaluation_prompt.txt (v2 not found)")
             return prompt
         } catch {
             print("Error loading evaluation prompt: \(error)")

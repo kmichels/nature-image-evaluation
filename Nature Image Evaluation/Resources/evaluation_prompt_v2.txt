@@ -1,0 +1,102 @@
+You are evaluating nature/landscape/wildlife photography. Generate comprehensive metadata and evaluation scores.
+
+RESPOND WITH A JSON OBJECT CONTAINING ALL FIELDS LISTED BELOW.
+
+## REQUIRED OUTPUT STRUCTURE
+
+Your response MUST be a valid JSON object with these EXACT fields:
+
+### 1. METADATA FIELDS (REQUIRED)
+- title: String (max 60 chars) - Compelling descriptive title
+- description: String (150-200 chars) - Rich description with emotional appeal
+- keywords: Array of 15-20 relevant search terms
+- alt_text: String (max 125 chars) - Accessibility description
+- suggested_categories: Array of 3-5 marketplace categories
+- best_use_cases: Array of 3-5 commercial applications
+- suggested_price_tier: String - "HIGH" ($500+), "MID" ($150-500), "LOW" ($50-150), or "ARTISTIC"
+
+### 2. EVALUATION SCORES (REQUIRED)
+- composition_score: Number (1-10) - Visual arrangement and balance
+- quality_score: Number (1-10) - Technical excellence
+- sellability_score: Number (1-10) - Commercial viability
+- artistic_score: Number (1-10) - Creative vision and impact
+- overall_weighted_score: Number - Calculated weighted average
+
+### 3. PLACEMENT & FEEDBACK (REQUIRED)
+- primary_placement: String - "PORTFOLIO", "STORE", "BOTH", or "ARCHIVE"
+- strengths: Array of 3 specific positive observations
+- improvements: Array of 2-3 constructive suggestions
+- market_comparison: String - Similar work and pricing context
+- technical_innovations: Array of 2 notable techniques used
+- print_size_recommendation: String - Optimal print dimensions
+- price_tier_suggestion: String - Same as suggested_price_tier
+
+## EVALUATION CRITERIA
+
+### Composition (30% weight)
+- Rule of thirds, leading lines, patterns
+- Balance, symmetry, visual flow
+- Foreground/background relationships
+- Use of negative space
+- Framing and cropping decisions
+
+### Image Quality (25% weight)
+- Sharpness and detail (where artistically appropriate)
+- Noise management
+- Dynamic range and exposure
+- Color accuracy and vibrancy
+- Post-processing quality
+
+### Commercial Sellability (25% weight)
+- Market demand for subject/style
+- Uniqueness vs oversaturation
+- Technical requirements met
+- Print reproduction quality
+- Broad vs niche appeal
+
+### Artistic Merit (20% weight)
+- Creative vision and originality
+- Emotional impact and storytelling
+- Mastery of photographic techniques
+- Personal style development
+- Artistic risk-taking
+
+## PLACEMENT LOGIC
+- PORTFOLIO: High artistic merit (7+) regardless of commercial appeal
+- STORE: High commercial appeal (7+) with acceptable quality (5+)
+- BOTH: Scores 7+ in both artistic merit and commercial appeal
+- ARCHIVE: Neither criterion strongly met (both under 5)
+
+## EXAMPLE RESPONSE
+{
+  "title": "Ethereal Orchid Dreams",
+  "description": "Delicate orchid petals captured in soft morning light, creating an intimate botanical portrait with painterly qualities and serene mood",
+  "keywords": ["orchid", "flower", "botanical", "macro", "soft focus", "pastel", "pink", "ethereal", "dreamy", "nature", "floral art", "minimalist", "zen", "meditation", "fine art", "wall decor", "close-up", "petals", "translucent", "botanical photography"],
+  "alt_text": "Close-up of pink orchid petals with soft focus background creating dreamy botanical portrait",
+  "suggested_categories": ["Botanical Art", "Macro Photography", "Fine Art Florals", "Zen & Meditation", "Minimalist Nature"],
+  "best_use_cases": ["Wall Art", "Spa Decor", "Meditation Space", "Healthcare Facilities", "Greeting Cards"],
+  "suggested_price_tier": "MID",
+  "composition_score": 8.0,
+  "quality_score": 9.0,
+  "sellability_score": 7.0,
+  "artistic_score": 9.0,
+  "overall_weighted_score": 8.2,
+  "primary_placement": "BOTH",
+  "strengths": [
+    "Exceptional bokeh creates dreamlike atmosphere perfect for contemplative spaces",
+    "Masterful use of soft light reveals delicate petal textures and translucency",
+    "Sophisticated color palette appeals to high-end interior design market"
+  ],
+  "improvements": [
+    "Consider slight contrast boost in post to enhance depth without losing ethereal quality",
+    "A subtle vignette could strengthen the intimate feeling",
+    "Explore series potential with multiple angles of same subject"
+  ],
+  "market_comparison": "Similar to high-end botanical prints by Karl Blossfeldt or contemporary work by Imogen Cunningham disciples. Market rate $150-500 for limited editions",
+  "technical_innovations": [
+    "Expert light diffusion technique creating painterly effect",
+    "Possible focus stacking for selective sharpness"
+  ],
+  "print_size_recommendation": "16x16 to 30x30 inches optimal for square format",
+  "price_tier_suggestion": "MID"
+}

@@ -28,7 +28,7 @@ struct ImageDetailView: View {
         case evaluation = "Evaluation"
         case technical = "Technical"
         case commercial = "Commercial"
-        case raw = "Raw Response"
+        case metadata = "SEO Metadata"
     }
 
     var body: some View {
@@ -271,23 +271,133 @@ struct ImageDetailView: View {
                     }
                     .tag(DetailTab.commercial)
 
-                    // Raw Response Tab
+                    // SEO Metadata Tab
                     ScrollView {
-                        if let rawResponse = evaluation.currentEvaluation?.rawAIResponse {
-                            Text(rawResponse)
-                                .font(.system(.body, design: .monospaced))
-                                .textSelection(.enabled)
+                        VStack(alignment: .leading, spacing: 20) {
+                            if let result = evaluation.currentEvaluation,
+                               result.title != nil || result.descriptionText != nil {
+
+                                // Show placement recommendation banner
+                                if let placement = result.primaryPlacement {
+                                    HStack {
+                                        Image(systemName: placementIcon(for: placement))
+                                            .foregroundStyle(placementColor(for: placement))
+                                        Text("Recommended for: \(placement)")
+                                            .font(.headline)
+                                        Spacer()
+                                    }
+                                    .padding()
+                                    .background(placementColor(for: placement).opacity(0.1))
+                                    .cornerRadius(8)
+                                }
+
+                                // Title & Description
+                                if let title = result.title {
+                                    DetailSection(title: "Title", icon: "text.badge.star", color: .blue) {
+                                        Text(title)
+                                            .font(.title3.bold())
+                                            .textSelection(.enabled)
+                                    }
+                                }
+
+                                if let description = result.descriptionText {
+                                    DetailSection(title: "Description", icon: "text.alignleft", color: .green) {
+                                        Text(description)
+                                            .font(.body)
+                                            .textSelection(.enabled)
+                                    }
+                                }
+
+                                // Alt Text
+                                if let altText = result.altText {
+                                    DetailSection(title: "Alt Text", icon: "accessibility", color: .orange) {
+                                        Text(altText)
+                                            .font(.body)
+                                            .textSelection(.enabled)
+                                    }
+                                }
+
+                                // Keywords
+                                if let keywords = result.keywords, !keywords.isEmpty {
+                                    DetailSection(title: "Keywords (\(keywords.count))", icon: "tag.fill", color: .purple) {
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 8) {
+                                                ForEach(keywords, id: \.self) { keyword in
+                                                    Text(keyword)
+                                                        .font(.caption)
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 4)
+                                                        .background(Color.purple.opacity(0.1))
+                                                        .cornerRadius(4)
+                                                }
+                                            }
+                                        }
+
+                                        // Copyable keywords list
+                                        Text(keywords.joined(separator: ", "))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .textSelection(.enabled)
+                                            .padding(.top, 4)
+                                    }
+                                }
+
+                                // Suggested Categories
+                                if let categories = result.suggestedCategories, !categories.isEmpty {
+                                    DetailSection(title: "Categories", icon: "folder.fill", color: .indigo) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            ForEach(categories, id: \.self) { category in
+                                                HStack {
+                                                    Image(systemName: "chevron.right")
+                                                        .font(.caption)
+                                                        .foregroundStyle(.indigo)
+                                                    Text(category)
+                                                        .font(.body)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Best Use Cases
+                                if let useCases = result.bestUseCases, !useCases.isEmpty {
+                                    DetailSection(title: "Best Use Cases", icon: "lightbulb.fill", color: .yellow) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            ForEach(useCases, id: \.self) { useCase in
+                                                HStack {
+                                                    Image(systemName: "checkmark.circle.fill")
+                                                        .font(.caption)
+                                                        .foregroundStyle(.green)
+                                                    Text(useCase)
+                                                        .font(.body)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                            } else {
+                                VStack(spacing: 20) {
+                                    Image(systemName: "tag.slash")
+                                        .font(.system(size: 48))
+                                        .foregroundStyle(.secondary)
+                                    Text("No commercial metadata available")
+                                        .font(.title3)
+                                        .foregroundStyle(.secondary)
+                                    Text("Metadata is generated for images with STORE or BOTH placement")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .padding()
-                        } else {
-                            Text("No raw response available")
-                                .foregroundStyle(.secondary)
-                                .padding()
+                            }
                         }
+                        .padding()
                     }
                     .tabItem {
-                        Label("Raw Response", systemImage: "doc.text")
+                        Label("SEO Metadata", systemImage: "tag.fill")
                     }
-                    .tag(DetailTab.raw)
+                    .tag(DetailTab.metadata)
                 }
             }
             .frame(minWidth: 500)
@@ -392,6 +502,26 @@ struct ImageDetailView: View {
         case 6..<8: return .blue
         case 4..<6: return .orange
         default: return .red
+        }
+    }
+
+    private func placementIcon(for placement: String) -> String {
+        switch placement {
+        case "STORE": return "cart.fill"
+        case "PORTFOLIO": return "photo.artframe"
+        case "BOTH": return "star.fill"
+        case "ARCHIVE": return "archivebox.fill"
+        default: return "questionmark.circle"
+        }
+    }
+
+    private func placementColor(for placement: String) -> Color {
+        switch placement {
+        case "STORE": return .green
+        case "PORTFOLIO": return .purple
+        case "BOTH": return .blue
+        case "ARCHIVE": return .gray
+        default: return .secondary
         }
     }
 }

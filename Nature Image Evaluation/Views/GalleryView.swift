@@ -28,8 +28,7 @@ struct GalleryView: View {
     @State private var isImporting = false
     @State private var isDragOver = false
     @State private var showingEvaluationSheet = false
-    @State private var showingDetailView = false
-    @State private var detailViewImage: ImageEvaluation?
+    @State private var detailViewImage: ImageEvaluation?  // When non-nil, shows detail view
     @State private var searchText = ""
     @State private var sortOption: SortOption = .dateAdded
     @State private var filterOption: FilterOption = .all
@@ -276,15 +275,10 @@ struct GalleryView: View {
         .sheet(isPresented: $showingEvaluationSheet) {
             EvaluationProgressView(manager: evaluationManager)
         }
-        .sheet(isPresented: $showingDetailView) {
-            if let image = detailViewImage {
-                let _ = print("🔷 Sheet presenting with image: \(image.id?.uuidString ?? "unknown")")
-                ImageDetailView(evaluation: image)
-                    .environment(\.managedObjectContext, viewContext)
-            } else {
-                let _ = print("🔶 Sheet presented but detailViewImage is nil!")
-                Text("No image selected")
-            }
+        .sheet(item: $detailViewImage) { image in
+            let _ = print("🔷 Sheet presenting with image: \(image.id?.uuidString ?? "unknown")")
+            ImageDetailView(evaluation: image)
+                .environment(\.managedObjectContext, viewContext)
         }
         .alert("Delete Images", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -357,8 +351,6 @@ struct GalleryView: View {
         print("  - Has thumbnail: \(evaluation.thumbnailData != nil)")
         detailViewImage = evaluation
         print("  - detailViewImage set: \(detailViewImage != nil)")
-        showingDetailView = true
-        print("  - showingDetailView set to: \(showingDetailView)")
     }
 
     private func startEvaluation() {
@@ -493,6 +485,18 @@ struct ImageThumbnailView: View {
                     .foregroundStyle(isSelected ? .blue : .white)
                     .background(Circle().fill(.black.opacity(0.5)))
                     .padding(8)
+
+                // Commercial Metadata Indicator (bottom left) - show for STORE/BOTH placement
+                if let result = evaluation.currentEvaluation,
+                   result.title != nil,
+                   (result.primaryPlacement == "STORE" || result.primaryPlacement == "BOTH") {
+                    Image(systemName: "tag.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white)
+                        .padding(4)
+                        .background(Circle().fill(Color.green.opacity(0.9)))
+                        .position(x: 14, y: 150 - 14)
+                }
 
                 // Evaluation Badge
                 if let result = evaluation.currentEvaluation {

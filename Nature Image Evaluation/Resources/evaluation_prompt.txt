@@ -79,6 +79,16 @@ Based on the scores above, recommend primary placement:
 - BOTH: Scores 7+ in both artistic merit and commercial appeal
 - ARCHIVE: Neither criterion strongly met (both under 5)
 
+## COMMERCIAL METADATA (REQUIRED FOR ALL IMAGES)
+You MUST generate the following metadata for EVERY image:
+- Title: Compelling, descriptive title (60 chars max) that captures the essence and mood
+- Description: Rich description (150-200 chars) that tells the story and emotional appeal
+- Keywords: 15-20 relevant, searchable keywords including: subject, location, mood, style, color palette, season, technique
+- Alt Text: Accessible description for screen readers (125 chars max)
+- Categories: 3-5 suggested marketplace categories (e.g., "Landscape", "Wildlife", "Abstract Nature")
+- Use Cases: 3-5 best commercial applications (e.g., "Wall Art", "Calendar", "Book Cover", "Website Header", "Gallery Exhibition", "Editorial Use")
+- Price Tier: Suggested tier based on market analysis (HIGH: $500+, MID: $150-500, LOW: $50-150, ARTISTIC: Variable/Exhibition pricing)
+
 ## SPECIFIC FEEDBACK
 Provide 2-3 specific, actionable observations about:
 1. The strongest technical or artistic element in this image
@@ -88,7 +98,8 @@ Provide 2-3 specific, actionable observations about:
 NOTE: Do not suggest removing atmosphere or mood-enhancing elements like fog, haze, or intentional softness.
 
 ## OUTPUT FORMAT
-Respond with ONLY a JSON object in this exact format:
+You MUST respond with ONLY a JSON object that includes ALL of the following fields. Do not omit any field:
+
 {
   "composition_score": 7.5,
   "quality_score": 8.0,
@@ -112,5 +123,14 @@ Respond with ONLY a JSON object in this exact format:
     "Excellent balance between technical execution and artistic vision"
   ],
   "print_size_recommendation": "Optimal at 16x24 to 30x40 inches",
-  "price_tier_suggestion": "MID"
+  "price_tier_suggestion": "MID",
+  "title": "Golden Hour Mountain Majesty",
+  "description": "Breathtaking alpine landscape bathed in warm sunset light, capturing the serene beauty and dramatic scale of mountain wilderness",
+  "keywords": ["landscape", "mountain", "sunset", "golden hour", "alpine", "nature", "wilderness", "dramatic", "peaks", "warm light", "scenic", "outdoor", "adventure", "vista", "rocky mountains"],
+  "alt_text": "Mountain peaks illuminated by golden sunset light with dramatic clouds and alpine meadow foreground",
+  "suggested_categories": ["Landscape", "Mountain Photography", "Nature Art", "Sunset Photography"],
+  "best_use_cases": ["Wall Art", "Canvas Print", "Hotel Decor", "Calendar", "Book Cover"],
+  "suggested_price_tier": "MID"
 }
+
+CRITICAL: You MUST include ALL fields shown above, especially the commercial metadata fields (title, description, keywords, alt_text, suggested_categories, best_use_cases, suggested_price_tier). These are REQUIRED for EVERY image, regardless of placement. Do NOT omit these fields.

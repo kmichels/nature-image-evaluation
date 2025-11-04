@@ -46,6 +46,13 @@ class CoreDataModel {
         imageAttributes.append(createAttribute(name: "isFavorite", type: .booleanAttributeType, optional: true, defaultValue: false))
         imageAttributes.append(createAttribute(name: "lastModifiedDate", type: .dateAttributeType, optional: true))
 
+        // Organization Metadata (NEW)
+        imageAttributes.append(createAttribute(name: "sourceFolder", type: .stringAttributeType, optional: true))
+        imageAttributes.append(createAttribute(name: "importBatch", type: .stringAttributeType, optional: true))
+        imageAttributes.append(createAttribute(name: "projectName", type: .stringAttributeType, optional: true))
+        imageAttributes.append(createAttribute(name: "originalFileCreationDate", type: .dateAttributeType, optional: true))
+        imageAttributes.append(createAttribute(name: "userTags", type: .transformableAttributeType, optional: true, transformerName: "NSSecureUnarchiveFromDataTransformer"))
+
         imageEntity.properties = imageAttributes
 
         // MARK: - EvaluationResult Entity
@@ -108,6 +115,15 @@ class CoreDataModel {
         // Additional Metadata (NEW)
         evalAttributes.append(createAttribute(name: "providerMetadata", type: .transformableAttributeType, optional: true, transformerName: "NSSecureUnarchiveFromDataTransformer"))
         evalAttributes.append(createAttribute(name: "comparisonGroup", type: .UUIDAttributeType, optional: true))
+
+        // SEO and Commerce Metadata (NEW)
+        evalAttributes.append(createAttribute(name: "title", type: .stringAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "descriptionText", type: .stringAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "keywords", type: .transformableAttributeType, optional: true, transformerName: "NSSecureUnarchiveFromDataTransformer"))
+        evalAttributes.append(createAttribute(name: "altText", type: .stringAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "suggestedCategories", type: .transformableAttributeType, optional: true, transformerName: "NSSecureUnarchiveFromDataTransformer"))
+        evalAttributes.append(createAttribute(name: "bestUseCases", type: .transformableAttributeType, optional: true, transformerName: "NSSecureUnarchiveFromDataTransformer"))
+        evalAttributes.append(createAttribute(name: "suggestedPriceTier", type: .stringAttributeType, optional: true))
 
         evalEntity.properties = evalAttributes
 
@@ -175,12 +191,33 @@ class CoreDataModel {
 
         statsEntity.properties = statsAttributes
 
+        // MARK: - Collection Entity (NEW)
+
+        let collectionEntity = NSEntityDescription()
+        collectionEntity.name = "Collection"
+        collectionEntity.managedObjectClassName = "Collection"
+
+        var collectionAttributes: [NSAttributeDescription] = []
+
+        collectionAttributes.append(createAttribute(name: "id", type: .UUIDAttributeType, optional: true))
+        collectionAttributes.append(createAttribute(name: "name", type: .stringAttributeType, optional: true))
+        collectionAttributes.append(createAttribute(name: "icon", type: .stringAttributeType, optional: true, defaultValue: "folder"))
+        collectionAttributes.append(createAttribute(name: "color", type: .stringAttributeType, optional: true, defaultValue: "blue"))
+        collectionAttributes.append(createAttribute(name: "dateCreated", type: .dateAttributeType, optional: true))
+        collectionAttributes.append(createAttribute(name: "sortOrder", type: .integer32AttributeType, optional: true, defaultValue: 0))
+        collectionAttributes.append(createAttribute(name: "isSmartFolder", type: .booleanAttributeType, optional: true, defaultValue: false))
+        collectionAttributes.append(createAttribute(name: "smartPredicate", type: .stringAttributeType, optional: true))
+        collectionAttributes.append(createAttribute(name: "collectionDescription", type: .stringAttributeType, optional: true))
+
+        collectionEntity.properties = collectionAttributes
+
         // MARK: - Set up Relationships
 
         // After all entities are defined, now we set up relationships
         var imageRelationships: [NSRelationshipDescription] = []
         var evalRelationships: [NSRelationshipDescription] = []
         var sessionRelationships: [NSRelationshipDescription] = []
+        var collectionRelationships: [NSRelationshipDescription] = []
 
         // ImageEvaluation → EvaluationResult (one-to-many for history)
         let evaluationHistoryRel = NSRelationshipDescription()
@@ -242,6 +279,25 @@ class CoreDataModel {
         evaluationsRel.deleteRule = .cascadeDeleteRule
         sessionRelationships.append(evaluationsRel)
 
+        // Collection ⟷ ImageEvaluation (many-to-many)
+        let collectionsRel = NSRelationshipDescription()
+        collectionsRel.name = "collections"
+        collectionsRel.destinationEntity = collectionEntity
+        collectionsRel.minCount = 0
+        collectionsRel.maxCount = 0 // to-many
+        collectionsRel.isOptional = true
+        collectionsRel.deleteRule = .nullifyDeleteRule
+        imageRelationships.append(collectionsRel)
+
+        let imagesRel = NSRelationshipDescription()
+        imagesRel.name = "images"
+        imagesRel.destinationEntity = imageEntity
+        imagesRel.minCount = 0
+        imagesRel.maxCount = 0 // to-many
+        imagesRel.isOptional = true
+        imagesRel.deleteRule = .nullifyDeleteRule
+        collectionRelationships.append(imagesRel)
+
         // Set up inverse relationships
         evaluationHistoryRel.inverseRelationship = imageEvaluationRel
         imageEvaluationRel.inverseRelationship = evaluationHistoryRel
@@ -252,13 +308,17 @@ class CoreDataModel {
         sessionRel.inverseRelationship = evaluationsRel
         evaluationsRel.inverseRelationship = sessionRel
 
+        collectionsRel.inverseRelationship = imagesRel
+        imagesRel.inverseRelationship = collectionsRel
+
         // Add relationships to entities
         imageEntity.properties.append(contentsOf: imageRelationships)
         evalEntity.properties.append(contentsOf: evalRelationships)
         sessionEntity.properties.append(contentsOf: sessionRelationships)
+        collectionEntity.properties.append(contentsOf: collectionRelationships)
 
         // Add all entities to model
-        model.entities = [imageEntity, evalEntity, sessionEntity, providerEntity, statsEntity]
+        model.entities = [imageEntity, evalEntity, sessionEntity, providerEntity, statsEntity, collectionEntity]
 
         return model
     }

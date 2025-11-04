@@ -428,6 +428,18 @@ final class EvaluationManager {
         result.technicalInnovations = response.technicalInnovations
         result.printSizeRecommendation = response.printSizeRecommendation
         result.priceTierSuggestion = response.priceTierSuggestion
+
+        // Store commercial metadata if present (for STORE or BOTH placement)
+        result.title = response.title
+        result.descriptionText = response.descriptionText
+        result.keywords = response.keywords
+        result.altText = response.altText
+        result.suggestedCategories = response.suggestedCategories
+        result.bestUseCases = response.bestUseCases
+        result.suggestedPriceTier = response.suggestedPriceTier
+
+
+        // API usage
         result.inputTokens = Int32(response.inputTokens)
         result.outputTokens = Int32(response.outputTokens)
         result.rawAIResponse = response.rawResponse
