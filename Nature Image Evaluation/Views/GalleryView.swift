@@ -368,7 +368,16 @@ struct GalleryView: View {
     }
 
     private func isImageInQueue(_ evaluation: ImageEvaluation) -> Bool {
-        return evaluationManager.evaluationQueue.contains(evaluation)
+        guard evaluationManager.isProcessing else { return false }
+
+        // Check if this image is in the queue
+        guard let index = evaluationManager.evaluationQueue.firstIndex(of: evaluation) else {
+            return false
+        }
+
+        // Only show as queued if it hasn't been processed yet
+        // currentImageIndex is 1-based, so index should be >= currentImageIndex
+        return index >= evaluationManager.currentImageIndex
     }
 
     private func getFilename(_ evaluation: ImageEvaluation) -> String {
@@ -539,7 +548,7 @@ struct ImageThumbnailView: View {
                         Rectangle()
                             .fill(.black.opacity(0.6))
 
-                        VStack(spacing: 12) {
+                        VStack(spacing: 8) {
                             ProgressView()
                                 .controlSize(.regular)
                                 .progressViewStyle(CircularProgressViewStyle())
@@ -549,6 +558,7 @@ struct ImageThumbnailView: View {
                                 .fontWeight(.medium)
                                 .foregroundStyle(.white)
                         }
+                        .padding(.bottom, 20) // Adjust for badge space
                     }
                 } else if isInQueue {
                     ZStack {
@@ -564,6 +574,7 @@ struct ImageThumbnailView: View {
                                 .font(.caption)
                                 .foregroundStyle(.white.opacity(0.9))
                         }
+                        .padding(.bottom, 20) // Adjust for badge space
                     }
                 }
             }
