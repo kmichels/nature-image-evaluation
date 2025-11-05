@@ -214,7 +214,7 @@ struct GalleryView: View {
                     .padding()
 
                 } else {
-                    LazyVGrid(columns: columns, spacing: 20) {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(filteredImages.indices, id: \.self) { index in
                             let evaluation = filteredImages[index]
                             let isSelected = selectedImages.contains(evaluation)
@@ -233,6 +233,7 @@ struct GalleryView: View {
                                 },
                                 debugIndex: index
                             )
+                            .frame(minWidth: 150, idealWidth: 175, maxWidth: 200, minHeight: 180, maxHeight: 240)
                             .id(evaluation.objectID)
                             .contextMenu {
                                 Button(action: {
@@ -259,7 +260,9 @@ struct GalleryView: View {
                             }
                         }
                     }
-                    .padding()
+                    .padding(.horizontal)
+                    .padding(.top)
+                    .padding(.bottom, 40) // Extra bottom padding for scroll
                 }
             }
             .background(isDragOver ? Color.accentColor.opacity(0.1) : Color.clear)
@@ -301,10 +304,20 @@ struct GalleryView: View {
     // MARK: - Computed Properties
 
     private var filteredImages: [ImageEvaluation] {
-        imageEvaluations
+        let result = imageEvaluations
             .filter { filterOption.matches($0) }
             .filter { searchText.isEmpty || matchesSearch($0) }
             .sorted(by: sortOption.sortDescriptor)
+
+        // Debug: Log array information
+        if result.count > 0 {
+            print("📊 FilteredImages count: \(result.count)")
+            for (i, img) in result.prefix(3).enumerated() {
+                print("   [\(i)]: \(getFilename(img))")
+            }
+        }
+
+        return result
     }
 
     private var failedImages: [ImageEvaluation] {
