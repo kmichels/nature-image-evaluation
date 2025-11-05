@@ -223,15 +223,11 @@ struct GalleryView: View {
                                 evaluation: evaluation,
                                 isSelected: isSelected,
                                 onTap: {
-                                    print("🟢 Tap at actual index \(index)")
-                                    print("   Image at this index: \(getFilename(evaluation))")
-                                    print("   Total images: \(filteredImages.count)")
                                     toggleSelection(evaluation)
                                 },
                                 onDoubleTap: {
                                     showDetailView(evaluation)
-                                },
-                                debugIndex: index
+                                }
                             )
                             .frame(minWidth: 150, idealWidth: 175, maxWidth: 200, minHeight: 180, maxHeight: 240)
                             .id(evaluation.objectID)
@@ -304,20 +300,10 @@ struct GalleryView: View {
     // MARK: - Computed Properties
 
     private var filteredImages: [ImageEvaluation] {
-        let result = imageEvaluations
+        imageEvaluations
             .filter { filterOption.matches($0) }
             .filter { searchText.isEmpty || matchesSearch($0) }
             .sorted(by: sortOption.sortDescriptor)
-
-        // Debug: Log array information
-        if result.count > 0 {
-            print("📊 FilteredImages count: \(result.count)")
-            for (i, img) in result.prefix(3).enumerated() {
-                print("   [\(i)]: \(getFilename(img))")
-            }
-        }
-
-        return result
     }
 
     private var failedImages: [ImageEvaluation] {
@@ -357,19 +343,11 @@ struct GalleryView: View {
     // MARK: - Methods
 
     private func toggleSelection(_ evaluation: ImageEvaluation) {
-        let filename = getFilename(evaluation)
-        print("🟡 toggleSelection called for: \(filename)")
-        print("   ID: \(evaluation.id?.uuidString ?? "nil")")
-        print("   Currently selected count: \(selectedImages.count)")
-
         if selectedImages.contains(evaluation) {
             selectedImages.remove(evaluation)
-            print("   ❌ Removed from selection")
         } else {
             selectedImages.insert(evaluation)
-            print("   ✅ Added to selection")
         }
-        print("   New selected count: \(selectedImages.count)")
     }
 
     private func getFilename(_ evaluation: ImageEvaluation) -> String {
@@ -498,7 +476,6 @@ struct ImageThumbnailView: View {
     let isSelected: Bool
     let onTap: () -> Void
     let onDoubleTap: () -> Void
-    var debugIndex: Int? = nil  // Add debug index
 
     @State private var thumbnailImage: NSImage?
 
@@ -529,19 +506,6 @@ struct ImageThumbnailView: View {
                     .foregroundStyle(isSelected ? .blue : .white)
                     .background(Circle().fill(.black.opacity(0.5)))
                     .padding(8)
-
-            }
-            .overlay(alignment: .center) {
-                // Debug index overlay (temporary)
-                if let idx = debugIndex {
-                    Text("\(idx)")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.yellow)
-                        .padding(4)
-                        .background(Color.black.opacity(0.7))
-                        .cornerRadius(4)
-                        .allowsHitTesting(false) // Don't interfere with taps
-                }
 
             }
             .overlay(alignment: .bottomLeading) {
@@ -625,12 +589,9 @@ struct ImageThumbnailView: View {
         .background(Color.clear)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
-            print("🔵 Double-tap on image: \(filename)")
             onDoubleTap()
         }
         .onTapGesture(count: 1) {
-            print("🔵 Single-tap on image: \(filename)")
-            print("   Debug index: \(debugIndex ?? -1)")
             onTap()
         }
         .onAppear {
