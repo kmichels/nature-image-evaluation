@@ -218,10 +218,14 @@ struct GalleryView: View {
                         ForEach(filteredImages.indices, id: \.self) { index in
                             let evaluation = filteredImages[index]
                             let isSelected = selectedImages.contains(evaluation)
+                            let isBeingEvaluated = isImageBeingEvaluated(evaluation)
+                            let isInQueue = isImageInQueue(evaluation) && !isBeingEvaluated
 
                             ImageThumbnailView(
                                 evaluation: evaluation,
                                 isSelected: isSelected,
+                                isBeingEvaluated: isBeingEvaluated,
+                                isInQueue: isInQueue,
                                 onTap: {
                                     toggleSelection(evaluation)
                                 },
@@ -350,6 +354,23 @@ struct GalleryView: View {
         }
     }
 
+    private func isImageBeingEvaluated(_ evaluation: ImageEvaluation) -> Bool {
+        guard evaluationManager.isProcessing else { return false }
+
+        // Check if this image is in the current evaluation queue
+        guard let index = evaluationManager.evaluationQueue.firstIndex(of: evaluation) else {
+            return false
+        }
+
+        // Check if this is the current image being processed
+        // currentImageIndex is 1-based, array index is 0-based
+        return index == evaluationManager.currentImageIndex - 1
+    }
+
+    private func isImageInQueue(_ evaluation: ImageEvaluation) -> Bool {
+        return evaluationManager.evaluationQueue.contains(evaluation)
+    }
+
     private func getFilename(_ evaluation: ImageEvaluation) -> String {
         if let bookmarkData = evaluation.originalFilePath,
            let data = Data(base64Encoded: bookmarkData) {
@@ -385,7 +406,8 @@ struct GalleryView: View {
             do {
                 try await evaluationManager.startEvaluation()
                 await MainActor.run {
-                    selectedImages.removeAll()
+                    // Don't clear selection - let user see what was evaluated
+                    // selectedImages.removeAll() -- removed to keep selection visible
                     showingEvaluationSheet = false
                 }
             } catch {
@@ -474,6 +496,8 @@ struct GalleryView: View {
 struct ImageThumbnailView: View {
     let evaluation: ImageEvaluation
     let isSelected: Bool
+    var isBeingEvaluated: Bool = false
+    var isInQueue: Bool = false
     let onTap: () -> Void
     let onDoubleTap: () -> Void
 
@@ -507,6 +531,41 @@ struct ImageThumbnailView: View {
                     .background(Circle().fill(.black.opacity(0.5)))
                     .padding(8)
 
+            }
+            .overlay(alignment: .center) {
+                // Evaluation status overlay
+                if isBeingEvaluated {
+                    ZStack {
+                        Rectangle()
+                            .fill(.black.opacity(0.6))
+
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .controlSize(.regular)
+                                .progressViewStyle(CircularProgressViewStyle())
+
+                            Text("Evaluating...")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.white)
+                        }
+                    }
+                } else if isInQueue {
+                    ZStack {
+                        Rectangle()
+                            .fill(.black.opacity(0.4))
+
+                        VStack(spacing: 8) {
+                            Image(systemName: "clock.fill")
+                                .font(.title2)
+                                .foregroundStyle(.white.opacity(0.9))
+
+                            Text("Queued")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.9))
+                        }
+                    }
+                }
             }
             .overlay(alignment: .bottomLeading) {
                 // Commercial Metadata Indicator (bottom left) - show for STORE/BOTH placement
@@ -584,7 +643,7 @@ struct ImageThumbnailView: View {
                 .font(.caption)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .foregroundStyle(isSelected ? .blue : .primary)
+                .foregroundStyle(filenameColor)
         }
         .background(Color.clear)
         .contentShape(Rectangle())
@@ -611,6 +670,18 @@ struct ImageThumbnailView: View {
             }
         }
         return "Unknown"
+    }
+
+    private var filenameColor: Color {
+        if isBeingEvaluated {
+            return .green
+        } else if isInQueue {
+            return .orange
+        } else if isSelected {
+            return .blue
+        } else {
+            return .primary
+        }
     }
 
     private var scoreColor: Color {
