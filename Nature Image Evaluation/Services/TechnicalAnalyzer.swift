@@ -109,10 +109,8 @@ class TechnicalAnalyzer: ObservableObject {
         // Use Metal for GPU acceleration if available
         if let metalDevice = MTLCreateSystemDefaultDevice() {
             ciContext = CIContext(mtlDevice: metalDevice)
-            print("Technical analyzer using Metal GPU acceleration")
         } else {
             ciContext = CIContext(options: [.useSoftwareRenderer: false])
-            print("Technical analyzer using CPU rendering")
         }
     }
 
@@ -262,7 +260,6 @@ class TechnicalAnalyzer: ObservableObject {
             // Map average position to sharpness score
             // Images with edges in higher bins are sharper
             let sharpness = min(10, avgPosition * 20)
-            print("📊 Sharpness: weighted avg position = \(avgPosition), score = \(sharpness)")
             return sharpness
         }
 

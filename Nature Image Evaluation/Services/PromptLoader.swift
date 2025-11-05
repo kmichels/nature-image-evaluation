@@ -31,7 +31,6 @@ final class PromptLoader {
             do {
                 let prompt = try String(contentsOf: url, encoding: .utf8)
                 cachedEvaluationPrompt = prompt
-                print("📝 Using evaluation_prompt_v2.txt")
                 return prompt
             } catch {
                 print("Error loading evaluation_prompt_v2: \(error)")
@@ -50,7 +49,6 @@ final class PromptLoader {
         do {
             let prompt = try String(contentsOf: url, encoding: .utf8)
             cachedEvaluationPrompt = prompt
-            print("📝 Using evaluation_prompt.txt (v2 not found)")
             return prompt
         } catch {
             print("Error loading evaluation prompt: \(error)")
