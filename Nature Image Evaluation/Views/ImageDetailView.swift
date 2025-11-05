@@ -169,14 +169,102 @@ struct ImageDetailView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 20) {
                             if let result = evaluation.currentEvaluation {
-                                // Technical Innovations
+                                // Core Image Technical Analysis
+                                if result.technicalSharpness > 0 || result.technicalBlurAmount > 0 {
+                                    DetailSection(title: "Technical Analysis", icon: "camera.metering.matrix", color: .blue) {
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            // Sharpness Score
+                                            HStack {
+                                                Label("Sharpness", systemImage: "scope")
+                                                    .frame(width: 120, alignment: .leading)
+                                                ProgressView(value: Double(result.technicalSharpness) / 10)
+                                                    .tint(sharpnessColor(result.technicalSharpness))
+                                                    .frame(maxWidth: .infinity)
+                                                Text(String(format: "%.1f", result.technicalSharpness))
+                                                    .font(.system(.body, design: .monospaced))
+                                                    .frame(width: 40, alignment: .trailing)
+                                            }
+
+                                            // Blur Analysis
+                                            if result.technicalBlurAmount > 0.1 {
+                                                HStack {
+                                                    Label("Blur Detected", systemImage: "circle.hexagongrid.circle")
+                                                        .frame(width: 120, alignment: .leading)
+                                                    Text(result.technicalBlurType ?? "Unknown")
+                                                        .font(.system(.body, design: .monospaced))
+                                                    Text("(\(String(format: "%.1f%%", result.technicalBlurAmount * 100)))")
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                            }
+
+                                            // Artistic Intent
+                                            if let technique = result.technicalArtisticTechnique,
+                                               result.technicalIntentConfidence > 0.5 {
+                                                HStack {
+                                                    Label("Artistic Intent", systemImage: "paintbrush.pointed")
+                                                        .frame(width: 120, alignment: .leading)
+                                                    Text(technique)
+                                                        .font(.system(.body, design: .monospaced))
+                                                    Text("(\(String(format: "%.0f%%", result.technicalIntentConfidence * 100)) confidence)")
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                            }
+
+                                            // Focus Distribution
+                                            if let focusDistribution = result.technicalFocusDistribution {
+                                                HStack {
+                                                    Label("Focus Pattern", systemImage: "viewfinder.circle")
+                                                        .frame(width: 120, alignment: .leading)
+                                                    Text(focusDistribution)
+                                                        .font(.system(.body, design: .monospaced))
+                                                }
+                                            }
+
+                                            // Noise Level
+                                            if result.technicalNoiseLevel > 0 {
+                                                HStack {
+                                                    Label("Noise Level", systemImage: "waveform.path.ecg")
+                                                        .frame(width: 120, alignment: .leading)
+                                                    ProgressView(value: Double(result.technicalNoiseLevel))
+                                                        .tint(noiseColor(result.technicalNoiseLevel))
+                                                        .frame(maxWidth: .infinity)
+                                                    Text(noiseDescription(result.technicalNoiseLevel))
+                                                        .font(.system(.body, design: .monospaced))
+                                                        .frame(width: 80, alignment: .trailing)
+                                                }
+                                            }
+
+                                            // Contrast
+                                            if result.technicalContrast > 0 {
+                                                HStack {
+                                                    Label("Contrast", systemImage: "circle.lefthalf.filled")
+                                                        .frame(width: 120, alignment: .leading)
+                                                    Text(String(format: "%.1f:1", result.technicalContrast))
+                                                        .font(.system(.body, design: .monospaced))
+                                                }
+                                            }
+
+                                            // Exposure
+                                            if let exposure = result.technicalExposure {
+                                                HStack {
+                                                    Label("Exposure", systemImage: "sun.max")
+                                                        .frame(width: 120, alignment: .leading)
+                                                    Text(exposure)
+                                                        .font(.system(.body, design: .monospaced))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Technical Innovations from AI
                                 if let innovations = result.technicalInnovations, !innovations.isEmpty {
-                                    DetailSection(title: "Technical Innovations", icon: "camera.aperture", color: .blue) {
+                                    DetailSection(title: "Artistic Techniques", icon: "camera.aperture", color: .purple) {
                                         ForEach(innovations, id: \.self) { innovation in
                                             HStack(alignment: .top) {
                                                 Image(systemName: "chevron.right")
                                                     .font(.caption)
-                                                    .foregroundStyle(.blue)
+                                                    .foregroundStyle(.purple)
                                                 Text(innovation)
                                                     .font(.body)
                                             }
@@ -186,7 +274,7 @@ struct ImageDetailView: View {
 
                                 // Print Size Recommendation
                                 if let printSize = result.printSizeRecommendation {
-                                    DetailSection(title: "Print Size Recommendation", icon: "printer.fill", color: .purple) {
+                                    DetailSection(title: "Print Size Recommendation", icon: "printer.fill", color: .indigo) {
                                         Text(printSize)
                                             .font(.body)
                                     }
@@ -194,13 +282,23 @@ struct ImageDetailView: View {
                             }
 
                             // Processing Details
-                            DetailSection(title: "Processing Details", icon: "gearshape.2.fill", color: .gray) {
+                            DetailSection(title: "Image Information", icon: "info.circle.fill", color: .gray) {
                                 VStack(alignment: .leading, spacing: 8) {
+                                    if evaluation.originalWidth > 0 && evaluation.originalHeight > 0 {
+                                        HStack {
+                                            Text("Original Size:")
+                                                .foregroundStyle(.secondary)
+                                            Text("\(evaluation.originalWidth) × \(evaluation.originalHeight)")
+                                                .font(.system(.body, design: .monospaced))
+                                        }
+                                    }
+
                                     if evaluation.processedWidth > 0 && evaluation.processedHeight > 0 {
                                         HStack {
                                             Text("Processed Size:")
                                                 .foregroundStyle(.secondary)
                                             Text("\(evaluation.processedWidth) × \(evaluation.processedHeight)")
+                                                .font(.system(.body, design: .monospaced))
                                         }
                                     }
 
@@ -209,6 +307,16 @@ struct ImageDetailView: View {
                                             Text("Aspect Ratio:")
                                                 .foregroundStyle(.secondary)
                                             Text(String(format: "%.2f:1", evaluation.aspectRatio))
+                                                .font(.system(.body, design: .monospaced))
+                                        }
+                                    }
+
+                                    if evaluation.fileSize > 0 {
+                                        HStack {
+                                            Text("File Size:")
+                                                .foregroundStyle(.secondary)
+                                            Text(formatFileSize(evaluation.fileSize))
+                                                .font(.system(.body, design: .monospaced))
                                         }
                                     }
                                 }
@@ -522,6 +630,34 @@ struct ImageDetailView: View {
         case "BOTH": return .blue
         case "ARCHIVE": return .gray
         default: return .secondary
+        }
+    }
+
+    private func sharpnessColor(_ sharpness: Float) -> Color {
+        switch sharpness {
+        case 7...: return .green
+        case 5..<7: return .blue
+        case 3..<5: return .orange
+        default: return .red
+        }
+    }
+
+    private func noiseColor(_ noise: Float) -> Color {
+        switch noise {
+        case 0..<0.2: return .green
+        case 0.2..<0.4: return .blue
+        case 0.4..<0.6: return .orange
+        default: return .red
+        }
+    }
+
+    private func noiseDescription(_ noise: Float) -> String {
+        switch noise {
+        case 0..<0.1: return "Very Low"
+        case 0.1..<0.3: return "Low"
+        case 0.3..<0.5: return "Moderate"
+        case 0.5..<0.7: return "High"
+        default: return "Very High"
         }
     }
 }

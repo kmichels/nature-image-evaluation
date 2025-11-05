@@ -215,17 +215,25 @@ struct GalleryView: View {
 
                 } else {
                     LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(filteredImages) { evaluation in
+                        ForEach(filteredImages.indices, id: \.self) { index in
+                            let evaluation = filteredImages[index]
+                            let isSelected = selectedImages.contains(evaluation)
+
                             ImageThumbnailView(
                                 evaluation: evaluation,
-                                isSelected: selectedImages.contains(evaluation),
+                                isSelected: isSelected,
                                 onTap: {
+                                    print("🟢 Tap at actual index \(index)")
+                                    print("   Image at this index: \(getFilename(evaluation))")
+                                    print("   Total images: \(filteredImages.count)")
                                     toggleSelection(evaluation)
                                 },
                                 onDoubleTap: {
                                     showDetailView(evaluation)
-                                }
+                                },
+                                debugIndex: index
                             )
+                            .id(evaluation.objectID)
                             .contextMenu {
                                 Button(action: {
                                     showDetailView(evaluation)
@@ -336,11 +344,33 @@ struct GalleryView: View {
     // MARK: - Methods
 
     private func toggleSelection(_ evaluation: ImageEvaluation) {
+        let filename = getFilename(evaluation)
+        print("🟡 toggleSelection called for: \(filename)")
+        print("   ID: \(evaluation.id?.uuidString ?? "nil")")
+        print("   Currently selected count: \(selectedImages.count)")
+
         if selectedImages.contains(evaluation) {
             selectedImages.remove(evaluation)
+            print("   ❌ Removed from selection")
         } else {
             selectedImages.insert(evaluation)
+            print("   ✅ Added to selection")
         }
+        print("   New selected count: \(selectedImages.count)")
+    }
+
+    private func getFilename(_ evaluation: ImageEvaluation) -> String {
+        if let bookmarkData = evaluation.originalFilePath,
+           let data = Data(base64Encoded: bookmarkData) {
+            do {
+                var isStale = false
+                let url = try URL(resolvingBookmarkData: data, bookmarkDataIsStale: &isStale)
+                return url.lastPathComponent
+            } catch {
+                return "Unknown"
+            }
+        }
+        return "Unknown"
     }
 
     private func showDetailView(_ evaluation: ImageEvaluation) {
@@ -455,6 +485,7 @@ struct ImageThumbnailView: View {
     let isSelected: Bool
     let onTap: () -> Void
     let onDoubleTap: () -> Void
+    var debugIndex: Int? = nil  // Add debug index
 
     @State private var thumbnailImage: NSImage?
 
@@ -472,7 +503,7 @@ struct ImageThumbnailView: View {
                             .fill(Color.gray.opacity(0.2))
                             .overlay(
                                 ProgressView()
-                                    .scaleEffect(0.5)
+                                    .controlSize(.small)
                             )
                     }
                 }
@@ -486,6 +517,21 @@ struct ImageThumbnailView: View {
                     .background(Circle().fill(.black.opacity(0.5)))
                     .padding(8)
 
+            }
+            .overlay(alignment: .center) {
+                // Debug index overlay (temporary)
+                if let idx = debugIndex {
+                    Text("\(idx)")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.yellow)
+                        .padding(4)
+                        .background(Color.black.opacity(0.7))
+                        .cornerRadius(4)
+                        .allowsHitTesting(false) // Don't interfere with taps
+                }
+
+            }
+            .overlay(alignment: .bottomLeading) {
                 // Commercial Metadata Indicator (bottom left) - show for STORE/BOTH placement
                 if let result = evaluation.currentEvaluation,
                    result.title != nil,
@@ -495,9 +541,11 @@ struct ImageThumbnailView: View {
                         .foregroundStyle(.white)
                         .padding(4)
                         .background(Circle().fill(Color.green.opacity(0.9)))
-                        .position(x: 14, y: 150 - 14)
+                        .padding(8)
                 }
 
+            }
+            .overlay(alignment: .bottomTrailing) {
                 // Evaluation Badge
                 if let result = evaluation.currentEvaluation {
                     VStack(spacing: 2) {
@@ -535,7 +583,7 @@ struct ImageThumbnailView: View {
                     .padding(4)
                     .background(scoreColor.opacity(0.9))
                     .cornerRadius(4)
-                    .position(x: 150 - 35, y: 150 - 25)
+                    .padding(8)
                 } else if evaluation.dateLastEvaluated != nil &&
                          (evaluation.currentEvaluation == nil ||
                           evaluation.currentEvaluation?.evaluationStatus == "failed") {
@@ -550,7 +598,7 @@ struct ImageThumbnailView: View {
                     .padding(6)
                     .background(Color.red.opacity(0.9))
                     .cornerRadius(4)
-                    .position(x: 150 - 35, y: 150 - 25)
+                    .padding(8)
                 }
             }
 
@@ -561,11 +609,16 @@ struct ImageThumbnailView: View {
                 .truncationMode(.middle)
                 .foregroundStyle(isSelected ? .blue : .primary)
         }
-        .onTapGesture {
-            onTap()
-        }
+        .background(Color.clear)
+        .contentShape(Rectangle())
         .onTapGesture(count: 2) {
+            print("🔵 Double-tap on image: \(filename)")
             onDoubleTap()
+        }
+        .onTapGesture(count: 1) {
+            print("🔵 Single-tap on image: \(filename)")
+            print("   Debug index: \(debugIndex ?? -1)")
+            onTap()
         }
         .onAppear {
             loadThumbnail()
@@ -619,7 +672,7 @@ struct EvaluationStatusBar: View {
     var body: some View {
         HStack(spacing: 20) {
             ProgressView()
-                .scaleEffect(0.7)
+                .controlSize(.small)
 
             Text(manager.statusMessage)
                 .font(.caption)

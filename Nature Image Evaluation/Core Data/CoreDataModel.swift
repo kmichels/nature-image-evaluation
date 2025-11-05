@@ -125,6 +125,17 @@ class CoreDataModel {
         evalAttributes.append(createAttribute(name: "bestUseCases", type: .transformableAttributeType, optional: true, transformerName: "NSSecureUnarchiveFromDataTransformer"))
         evalAttributes.append(createAttribute(name: "suggestedPriceTier", type: .stringAttributeType, optional: true))
 
+        // Technical Metrics (NEW - Core Image analysis)
+        evalAttributes.append(createAttribute(name: "technicalSharpness", type: .floatAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "technicalBlurType", type: .stringAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "technicalBlurAmount", type: .floatAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "technicalFocusDistribution", type: .stringAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "technicalNoiseLevel", type: .floatAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "technicalContrast", type: .floatAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "technicalExposure", type: .stringAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "technicalArtisticTechnique", type: .stringAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "technicalIntentConfidence", type: .floatAttributeType, optional: true))
+
         evalEntity.properties = evalAttributes
 
         // MARK: - EvaluationSession Entity (NEW)

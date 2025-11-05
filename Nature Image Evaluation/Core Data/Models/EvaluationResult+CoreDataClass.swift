@@ -48,6 +48,17 @@ extension EvaluationResult {
     @NSManaged public var bestUseCases: [String]?
     @NSManaged public var suggestedPriceTier: String?
 
+    // Technical Metrics (NEW - Core Image analysis)
+    @NSManaged public var technicalSharpness: Float
+    @NSManaged public var technicalBlurType: String?
+    @NSManaged public var technicalBlurAmount: Float
+    @NSManaged public var technicalFocusDistribution: String?
+    @NSManaged public var technicalNoiseLevel: Float
+    @NSManaged public var technicalContrast: Float
+    @NSManaged public var technicalExposure: String?
+    @NSManaged public var technicalArtisticTechnique: String?
+    @NSManaged public var technicalIntentConfidence: Float
+
     // API Metadata
     @NSManaged public var inputTokens: Int32
     @NSManaged public var outputTokens: Int32

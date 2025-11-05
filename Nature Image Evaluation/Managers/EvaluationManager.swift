@@ -393,19 +393,52 @@ final class EvaluationManager {
             throw EvaluationError.processedImageNotFound
         }
 
+        // Run technical analysis first (local, free, fast)
+        let technicalAnalysis = try await TechnicalAnalyzer.shared.analyzeImage(processedImage)
+
+        print("🔬 Technical analysis complete in \(String(format: "%.2f", technicalAnalysis.analysisTime))s:")
+        print("  Sharpness: \(String(format: "%.1f", technicalAnalysis.metrics.sharpnessScore))/10")
+        print("  Blur: \(technicalAnalysis.metrics.blurType.rawValue) (amount: \(String(format: "%.2f", technicalAnalysis.metrics.blurAmount)))")
+        print("  Focus: \(technicalAnalysis.metrics.sharpnessMap.distribution) (\(Int(technicalAnalysis.metrics.sharpnessMap.sharpnessPercentage * 100))% sharp)")
+        print("  Exposure: \(technicalAnalysis.metrics.exposure.distribution)")
+        if technicalAnalysis.intent.isLikelyIntentional {
+            print("  🎨 Artistic intent: \(technicalAnalysis.intent.probableTechnique.rawValue) (confidence: \(Int(technicalAnalysis.intent.confidence * 100))%)")
+        }
+
+        // Build enhanced prompt with technical context
+        let enhancedPrompt = buildEnhancedPrompt(
+            basePrompt: prompt,
+            technicalAnalysis: technicalAnalysis
+        )
+
         // Convert to base64
         guard let base64 = imageProcessor.imageToBase64(image: processedImage) else {
             throw EvaluationError.imageConversionFailed
         }
 
-        // Call API
+        // Call API with enhanced context
         let response = try await apiService.evaluateImage(
             imageBase64: base64,
-            prompt: prompt,
+            prompt: enhancedPrompt,
             apiKey: apiKey,
             model: currentProvider.model
         )
 
+        print("📊 Evaluation complete - Score: \(response.overallWeightedScore), Placement: \(response.primaryPlacement)")
+
+        // Store the evaluation with technical metrics
+        try storeEvaluationResult(
+            for: imageEval,
+            response: response,
+            technicalAnalysis: technicalAnalysis
+        )
+    }
+
+    private func storeEvaluationResult(
+        for imageEval: ImageEvaluation,
+        response: EvaluationResponse,
+        technicalAnalysis: TechnicalAnalysisResult
+    ) throws {
         // Check if this is a re-evaluation
         let previousResult = imageEval.currentEvaluation
         let isReEvaluation = previousResult != nil
@@ -437,6 +470,17 @@ final class EvaluationManager {
         result.suggestedCategories = response.suggestedCategories
         result.bestUseCases = response.bestUseCases
         result.suggestedPriceTier = response.suggestedPriceTier
+
+        // Store technical metrics from Core Image analysis
+        result.technicalSharpness = technicalAnalysis.metrics.sharpnessScore
+        result.technicalBlurType = technicalAnalysis.metrics.blurType.rawValue
+        result.technicalBlurAmount = technicalAnalysis.metrics.blurAmount
+        result.technicalFocusDistribution = technicalAnalysis.metrics.sharpnessMap.distribution
+        result.technicalNoiseLevel = technicalAnalysis.metrics.noiseLevel
+        result.technicalContrast = technicalAnalysis.metrics.contrastRatio
+        result.technicalExposure = technicalAnalysis.metrics.exposure.distribution
+        result.technicalArtisticTechnique = technicalAnalysis.intent.probableTechnique.rawValue
+        result.technicalIntentConfidence = technicalAnalysis.intent.confidence
 
 
         // API usage
@@ -507,6 +551,59 @@ final class EvaluationManager {
 
     private func updateProgress() {
         currentProgress = Double(currentImageIndex) / Double(totalImages)
+    }
+
+    private func buildEnhancedPrompt(basePrompt: String, technicalAnalysis: TechnicalAnalysisResult) -> String {
+        var enhancedPrompt = """
+        TECHNICAL ANALYSIS PROVIDED:
+
+        Sharpness: \(String(format: "%.1f", technicalAnalysis.metrics.sharpnessScore))/10
+        Focus Distribution: \(technicalAnalysis.metrics.sharpnessMap.distribution) (\(Int(technicalAnalysis.metrics.sharpnessMap.sharpnessPercentage * 100))% sharp)
+        Blur Type: \(technicalAnalysis.metrics.blurType.rawValue) (intensity: \(String(format: "%.1f", technicalAnalysis.metrics.blurAmount)))
+        Depth of Field: \(technicalAnalysis.metrics.depthOfField.estimatedAperture ?? "unknown")
+        Subject Isolation: \(String(format: "%.1f", technicalAnalysis.metrics.depthOfField.subjectIsolation))
+
+        Exposure: \(technicalAnalysis.metrics.exposure.distribution)
+        - Highlights clipped: \(String(format: "%.1f%%", technicalAnalysis.metrics.exposure.highlightsClipped * 100))
+        - Shadows clipped: \(String(format: "%.1f%%", technicalAnalysis.metrics.exposure.shadowsClipped * 100))
+        - Dynamic range: \(String(format: "%.1f", technicalAnalysis.metrics.exposure.dynamicRange))
+
+        Contrast: \(String(format: "%.1f", technicalAnalysis.metrics.contrastRatio))
+        Saturation: \(String(format: "%.1f", technicalAnalysis.metrics.colorSaturation))
+        Monochrome: \(technicalAnalysis.metrics.isMonochrome ? "Yes" : "No")
+        Noise Level: \(String(format: "%.1f", technicalAnalysis.metrics.noiseLevel))
+
+        """
+
+        // Add artistic intent if detected
+        if technicalAnalysis.intent.isLikelyIntentional {
+            enhancedPrompt += """
+
+            ARTISTIC INTENT DETECTED:
+            Probable Technique: \(technicalAnalysis.intent.probableTechnique.rawValue.replacingOccurrences(of: "_", with: " "))
+            Confidence: \(String(format: "%.0f%%", technicalAnalysis.intent.confidence * 100))
+            Evidence:
+            \(technicalAnalysis.intent.supportingEvidence.map { "- \($0)" }.joined(separator: "\n"))
+
+            Note: The technical characteristics above appear to be intentional artistic choices. Please evaluate them as creative techniques rather than technical flaws.
+
+            """
+        } else if technicalAnalysis.metrics.blurAmount > 0.5 {
+            enhancedPrompt += """
+
+            Note: Significant blur detected. Please assess whether this appears to be an intentional artistic choice (motion blur, ICM, soft focus) or an unintended technical issue.
+
+            """
+        }
+
+        enhancedPrompt += """
+
+        ---
+
+        \(basePrompt)
+        """
+
+        return enhancedPrompt
     }
 
     @MainActor
