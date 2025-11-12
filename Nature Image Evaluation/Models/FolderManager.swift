@@ -103,11 +103,8 @@ final class FolderManager {
     func scanFolder(_ folder: MonitoredFolder) throws -> [URL] {
         let url = try folder.resolveURL()
 
-        // Start accessing security-scoped resource
-        guard url.startAccessingSecurityScopedResource() else {
-            throw FolderError.accessDenied
-        }
-        defer { url.stopAccessingSecurityScopedResource() }
+        // Note: The caller is responsible for managing security scope access
+        // This allows the caller to keep access open for the duration needed
 
         // Get all image files in the folder
         let imageTypes: [UTType] = [.image, .png, .jpeg, .heic, .tiff, .rawImage]

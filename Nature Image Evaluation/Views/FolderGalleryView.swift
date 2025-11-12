@@ -324,13 +324,7 @@ struct FolderGalleryView: View {
     }
 
     private func processImage(from url: URL, for evaluation: ImageEvaluation) async -> ImageEvaluation? {
-        // Start security scope
-        guard url.startAccessingSecurityScopedResource() else {
-            print("Failed to access image for processing: \(url.lastPathComponent)")
-            return nil
-        }
-        defer { url.stopAccessingSecurityScopedResource() }
-
+        // Note: The parent folder already has security scope access, so we don't need it for individual files
         guard let image = NSImage(contentsOf: url) else {
             print("Failed to load image for processing: \(url.lastPathComponent)")
             return nil
@@ -473,28 +467,11 @@ struct FolderImageThumbnail: View {
     }
 
     private func loadThumbnail() async {
-        // Try loading image - parent folder should have security scope
-        var loadedImage: NSImage?
-
-        if let image = NSImage(contentsOf: url) {
-            loadedImage = image
-        } else {
-            // If regular loading fails, try with explicit security scope
-            print("Failed initial load, trying with security scope: \(url.lastPathComponent)")
-            guard url.startAccessingSecurityScopedResource() else {
-                print("Failed to access image for thumbnail: \(url.lastPathComponent)")
-                return
-            }
-            defer { url.stopAccessingSecurityScopedResource() }
-
-            loadedImage = NSImage(contentsOf: url)
-            if loadedImage == nil {
-                print("Still failed to load image: \(url.lastPathComponent)")
-                return
-            }
+        // Load image - parent folder already has security scope
+        guard let image = NSImage(contentsOf: url) else {
+            print("Failed to load image for thumbnail: \(url.lastPathComponent)")
+            return
         }
-
-        guard let image = loadedImage else { return }
 
         // Create thumbnail
         let targetSize = NSSize(width: 150, height: 150)
