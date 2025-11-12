@@ -129,9 +129,51 @@ struct FolderGalleryView: View {
             folderURL?.stopAccessingSecurityScopedResource()
         }
         .sheet(isPresented: $showingEvaluationSheet) {
-            // TODO: Create evaluation workflow for folder images
-            Text("Evaluation coming soon")
-                .padding()
+            @Bindable var manager = evaluationManager
+            VStack(spacing: 20) {
+                Text("Evaluating Images")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+
+                if manager.totalImages > 0 {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Progress:")
+                            Text("\(manager.currentImageIndex) of \(manager.totalImages)")
+                                .fontWeight(.semibold)
+                        }
+
+                        ProgressView(value: manager.currentProgress)
+                            .progressViewStyle(LinearProgressViewStyle())
+
+                        Text(manager.statusMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: 300)
+                }
+
+                HStack(spacing: 12) {
+                    if manager.successfulEvaluations > 0 {
+                        Label("\(manager.successfulEvaluations) completed", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+
+                    if manager.failedEvaluations > 0 {
+                        Label("\(manager.failedEvaluations) failed", systemImage: "xmark.circle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+                .font(.caption)
+
+                Button("Cancel") {
+                    manager.cancelEvaluation()
+                    showingEvaluationSheet = false
+                }
+                .keyboardShortcut(.escape, modifiers: [])
+            }
+            .padding(30)
+            .frame(minWidth: 400)
         }
     }
 
@@ -193,10 +235,63 @@ struct FolderGalleryView: View {
     }
 
     private func startEvaluation() {
-        // Convert selected URLs to ImageEvaluation objects for the evaluator
-        // This would need to create or find existing ImageEvaluation objects
-        // For now, show the evaluation sheet
+        guard !selectedImages.isEmpty else { return }
+
+        // Create or find ImageEvaluation objects for selected images
+        var evaluationsToProcess: [ImageEvaluation] = []
+
+        for imageURL in selectedImages {
+            // Check if we already have an evaluation for this image
+            if let existing = existingEvaluation(for: imageURL) {
+                evaluationsToProcess.append(existing)
+            } else {
+                // Create a new ImageEvaluation object
+                let newEvaluation = ImageEvaluation(context: viewContext)
+                newEvaluation.id = UUID()
+                newEvaluation.dateAdded = Date()
+
+                // Store the file path as a bookmark
+                if let bookmarkData = try? imageURL.bookmarkData(
+                    options: .withSecurityScope,
+                    includingResourceValuesForKeys: nil,
+                    relativeTo: nil
+                ) {
+                    newEvaluation.originalFilePath = bookmarkData.base64EncodedString()
+                }
+
+                evaluationsToProcess.append(newEvaluation)
+            }
+        }
+
+        // Save the new evaluations
+        if viewContext.hasChanges {
+            do {
+                try viewContext.save()
+            } catch {
+                print("Error saving new evaluations: \(error)")
+                return
+            }
+        }
+
+        // Start evaluation with the selected images
+        evaluationManager.evaluationQueue = evaluationsToProcess
         showingEvaluationSheet = true
+
+        Task {
+            do {
+                try await evaluationManager.startEvaluation()
+                await MainActor.run {
+                    // Clear selection after evaluation
+                    selectedImages.removeAll()
+                    showingEvaluationSheet = false
+                }
+            } catch {
+                print("Evaluation error: \(error)")
+                await MainActor.run {
+                    showingEvaluationSheet = false
+                }
+            }
+        }
     }
 }
 
