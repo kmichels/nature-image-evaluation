@@ -23,6 +23,7 @@ struct FolderGalleryView: View {
     @State private var evaluationManager = EvaluationManager()
     @State private var folderURL: URL?  // Store resolved folder URL for security scope
     @State private var evaluationCompletedCount = 0  // Trigger view refresh
+    @State private var detailViewImage: ImageEvaluation?  // For showing detail view
 
     // Grid layout
     private let columns = [
@@ -107,10 +108,16 @@ struct FolderGalleryView: View {
                             FolderImageThumbnail(
                                 url: imageURL,
                                 isSelected: selectedImages.contains(imageURL),
-                                existingEvaluation: existingEvaluation(for: imageURL)
-                            ) {
-                                toggleSelection(imageURL)
-                            }
+                                existingEvaluation: existingEvaluation(for: imageURL),
+                                onTap: {
+                                    toggleSelection(imageURL)
+                                },
+                                onDoubleTap: {
+                                    if let evaluation = existingEvaluation(for: imageURL) {
+                                        showDetailView(evaluation)
+                                    }
+                                }
+                            )
                         }
                     }
                     .padding()
@@ -176,6 +183,10 @@ struct FolderGalleryView: View {
             .padding(30)
             .frame(minWidth: 400)
         }
+        .sheet(item: $detailViewImage) { image in
+            ImageDetailView(evaluation: image)
+                .environment(\.managedObjectContext, viewContext)
+        }
     }
 
     // MARK: - Helper Methods
@@ -217,6 +228,10 @@ struct FolderGalleryView: View {
         } else {
             selectedImages.insert(url)
         }
+    }
+
+    private func showDetailView(_ evaluation: ImageEvaluation) {
+        detailViewImage = evaluation
     }
 
     private func existingEvaluation(for url: URL) -> ImageEvaluation? {
@@ -385,6 +400,7 @@ struct FolderImageThumbnail: View {
     let isSelected: Bool
     let existingEvaluation: ImageEvaluation?
     let onTap: () -> Void
+    let onDoubleTap: () -> Void
 
     @State private var thumbnail: NSImage?
 
@@ -458,7 +474,10 @@ struct FolderImageThumbnail: View {
                 .truncationMode(.middle)
                 .foregroundStyle(isSelected ? .blue : .primary)
         }
-        .onTapGesture {
+        .onTapGesture(count: 2) {
+            onDoubleTap()
+        }
+        .onTapGesture(count: 1) {
             onTap()
         }
         .task {
