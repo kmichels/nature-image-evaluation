@@ -237,47 +237,64 @@ struct FolderGalleryView: View {
     private func startEvaluation() {
         guard !selectedImages.isEmpty else { return }
 
-        // Create or find ImageEvaluation objects for selected images
-        var evaluationsToProcess: [ImageEvaluation] = []
-
-        for imageURL in selectedImages {
-            // Check if we already have an evaluation for this image
-            if let existing = existingEvaluation(for: imageURL) {
-                evaluationsToProcess.append(existing)
-            } else {
-                // Create a new ImageEvaluation object
-                let newEvaluation = ImageEvaluation(context: viewContext)
-                newEvaluation.id = UUID()
-                newEvaluation.dateAdded = Date()
-
-                // Store the file path as a bookmark
-                if let bookmarkData = try? imageURL.bookmarkData(
-                    options: .withSecurityScope,
-                    includingResourceValuesForKeys: nil,
-                    relativeTo: nil
-                ) {
-                    newEvaluation.originalFilePath = bookmarkData.base64EncodedString()
-                }
-
-                evaluationsToProcess.append(newEvaluation)
-            }
-        }
-
-        // Save the new evaluations
-        if viewContext.hasChanges {
-            do {
-                try viewContext.save()
-            } catch {
-                print("Error saving new evaluations: \(error)")
-                return
-            }
-        }
-
-        // Start evaluation with the selected images
-        evaluationManager.evaluationQueue = evaluationsToProcess
         showingEvaluationSheet = true
 
         Task {
+            // Create or find ImageEvaluation objects for selected images
+            var evaluationsToProcess: [ImageEvaluation] = []
+
+            for imageURL in selectedImages {
+                // Check if we already have an evaluation for this image
+                if let existing = existingEvaluation(for: imageURL) {
+                    // If it already has a processed file, we can re-evaluate
+                    if existing.processedFilePath != nil {
+                        evaluationsToProcess.append(existing)
+                    } else {
+                        // Need to process the image first
+                        if let processed = await processImage(from: imageURL, for: existing) {
+                            evaluationsToProcess.append(processed)
+                        }
+                    }
+                } else {
+                    // Create a new ImageEvaluation object
+                    let newEvaluation = ImageEvaluation(context: viewContext)
+                    newEvaluation.id = UUID()
+                    newEvaluation.dateAdded = Date()
+
+                    // Store the file path as a bookmark
+                    if let bookmarkData = try? imageURL.bookmarkData(
+                        options: .withSecurityScope,
+                        includingResourceValuesForKeys: nil,
+                        relativeTo: nil
+                    ) {
+                        newEvaluation.originalFilePath = bookmarkData.base64EncodedString()
+                    }
+
+                    // Process the image
+                    if let processed = await processImage(from: imageURL, for: newEvaluation) {
+                        evaluationsToProcess.append(processed)
+                    }
+                }
+            }
+
+            // Save the new evaluations
+            if viewContext.hasChanges {
+                do {
+                    try viewContext.save()
+                } catch {
+                    print("Error saving new evaluations: \(error)")
+                    await MainActor.run {
+                        showingEvaluationSheet = false
+                    }
+                    return
+                }
+            }
+
+            // Start evaluation with the selected images
+            await MainActor.run {
+                evaluationManager.evaluationQueue = evaluationsToProcess
+            }
+
             do {
                 try await evaluationManager.startEvaluation()
                 await MainActor.run {
@@ -292,6 +309,66 @@ struct FolderGalleryView: View {
                 }
             }
         }
+    }
+
+    private func processImage(from url: URL, for evaluation: ImageEvaluation) async -> ImageEvaluation? {
+        // Start security scope
+        guard url.startAccessingSecurityScopedResource() else {
+            print("Failed to access image for processing: \(url.lastPathComponent)")
+            return nil
+        }
+        defer { url.stopAccessingSecurityScopedResource() }
+
+        guard let image = NSImage(contentsOf: url) else {
+            print("Failed to load image for processing: \(url.lastPathComponent)")
+            return nil
+        }
+
+        // Get original dimensions
+        if let rep = image.representations.first {
+            evaluation.originalWidth = Int32(rep.pixelsWide)
+            evaluation.originalHeight = Int32(rep.pixelsHigh)
+        }
+
+        // Resize image for evaluation
+        let processor = ImageProcessor.shared
+        guard let resized = processor.resizeForEvaluation(image: image) else {
+            print("Failed to resize image: \(url.lastPathComponent)")
+            return nil
+        }
+
+        // Generate unique path for processed image
+        let processedURL = getProcessedImageURL(for: evaluation.id ?? UUID())
+
+        do {
+            // Save processed image
+            let fileSize = try processor.saveProcessedImage(resized, to: processedURL)
+            evaluation.processedFilePath = processedURL.path
+            evaluation.fileSize = fileSize
+
+            // Get processed dimensions
+            if let rep = resized.representations.first {
+                evaluation.processedWidth = Int32(rep.pixelsWide)
+                evaluation.processedHeight = Int32(rep.pixelsHigh)
+            }
+
+            return evaluation
+        } catch {
+            print("Error saving processed image: \(error)")
+            return nil
+        }
+    }
+
+    private func getProcessedImageURL(for id: UUID) -> URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appFolder = appSupport.appendingPathComponent("Nature Image Evaluation")
+        let processedFolder = appFolder.appendingPathComponent("ProcessedImages")
+        let imageFolder = processedFolder.appendingPathComponent(id.uuidString)
+
+        // Create directories if needed
+        try? FileManager.default.createDirectory(at: imageFolder, withIntermediateDirectories: true)
+
+        return imageFolder.appendingPathComponent("processed.jpg")
     }
 }
 
