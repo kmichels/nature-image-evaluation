@@ -22,6 +22,7 @@ struct FolderGalleryView: View {
     @State private var showingEvaluationSheet = false
     @State private var evaluationManager = EvaluationManager()
     @State private var folderURL: URL?  // Store resolved folder URL for security scope
+    @State private var evaluationCompletedCount = 0  // Trigger view refresh
 
     // Grid layout
     private let columns = [
@@ -30,7 +31,7 @@ struct FolderGalleryView: View {
 
     init(folder: MonitoredFolder) {
         self.folder = folder
-        // Fetch evaluations for this folder's images
+        // Fetch all evaluations - we'll match them by filename
         self._existingEvaluations = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \ImageEvaluation.dateAdded, ascending: false)],
             animation: .default
@@ -219,6 +220,9 @@ struct FolderGalleryView: View {
     }
 
     private func existingEvaluation(for url: URL) -> ImageEvaluation? {
+        // Use evaluationCompletedCount to force refresh when evaluations complete
+        _ = evaluationCompletedCount
+
         // Find if this image has already been evaluated
         let filename = url.lastPathComponent
         return existingEvaluations.first { evaluation in
@@ -297,10 +301,18 @@ struct FolderGalleryView: View {
 
             do {
                 try await evaluationManager.startEvaluation()
+
+                // Force Core Data to save
+                if viewContext.hasChanges {
+                    try? viewContext.save()
+                }
+
                 await MainActor.run {
                     // Clear selection after evaluation
                     selectedImages.removeAll()
                     showingEvaluationSheet = false
+                    // Trigger view refresh
+                    evaluationCompletedCount += 1
                 }
             } catch {
                 print("Evaluation error: \(error)")

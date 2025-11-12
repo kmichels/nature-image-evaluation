@@ -9,6 +9,8 @@ import SwiftUI
 import CoreData
 import UniformTypeIdentifiers
 
+/// Quick Analysis area for drag-and-drop image evaluation
+/// Provides fast evaluation of images without organizing into folders
 struct GalleryView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
@@ -192,18 +194,23 @@ struct GalleryView: View {
             // Main Content
             ScrollView {
                 if filteredImages.isEmpty {
-                    // Empty State
+                    // Empty State - Quick Analysis
                     VStack(spacing: 20) {
-                        Image(systemName: "photo.on.rectangle.angled")
+                        Image(systemName: "sparkles")
                             .font(.system(size: 60))
                             .foregroundStyle(.tertiary)
 
-                        Text("No Images")
+                        Text("Quick Analysis")
                             .font(.title2)
                             .fontWeight(.semibold)
 
-                        Text("Drag images here or click 'Import Images' to get started")
-                            .foregroundStyle(.secondary)
+                        VStack(spacing: 10) {
+                            Text("Drag images here for instant evaluation")
+                                .foregroundStyle(.primary)
+                            Text("Perfect for quick tests and one-off analyses")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
 
                         Button("Import Images...") {
                             isImporting = true
@@ -212,6 +219,12 @@ struct GalleryView: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 400)
                     .padding()
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(style: StrokeStyle(lineWidth: 2, dash: [10, 5]))
+                            .foregroundStyle(.tertiary)
+                            .opacity(isDragOver ? 1 : 0.3)
+                    )
 
                 } else {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
@@ -265,7 +278,16 @@ struct GalleryView: View {
                     .padding(.bottom, 40) // Extra bottom padding for scroll
                 }
             }
-            .background(isDragOver ? Color.accentColor.opacity(0.1) : Color.clear)
+            .background(
+                ZStack {
+                    if isDragOver {
+                        Color.accentColor.opacity(0.1)
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.accentColor, lineWidth: 3)
+                            .padding(10)
+                    }
+                }
+            )
             .animation(.easeInOut(duration: 0.2), value: isDragOver)
             .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
                 return handleDrop(providers)
