@@ -99,11 +99,22 @@ struct ContentView: View {
             switch result {
             case .success(let urls):
                 guard let url = urls.first else { return }
+
+                // Start accessing the security-scoped resource
+                guard url.startAccessingSecurityScopedResource() else {
+                    print("Failed to access folder: \(url)")
+                    return
+                }
+
                 do {
                     try folderManager.addFolder(at: url)
                 } catch {
                     print("Error adding folder: \(error)")
                 }
+
+                // Stop accessing the security-scoped resource
+                url.stopAccessingSecurityScopedResource()
+
             case .failure(let error):
                 print("Error selecting folder: \(error)")
             }

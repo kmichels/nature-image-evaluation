@@ -24,7 +24,7 @@ struct MonitoredFolder: Identifiable, Codable, Hashable {
 
         // Create security-scoped bookmark for persistent access
         self.bookmarkData = try url.bookmarkData(
-            options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+            options: .withSecurityScope,
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         )
@@ -33,7 +33,7 @@ struct MonitoredFolder: Identifiable, Codable, Hashable {
     /// Resolves the bookmark to get the actual URL
     func resolveURL() throws -> URL {
         var isStale = false
-        let url = try URL(resolvingBookmarkData: bookmarkData, options: [.withSecurityScope], relativeTo: nil, bookmarkDataIsStale: &isStale)
+        let url = try URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
 
         if isStale {
             throw FolderError.staleBookmark
