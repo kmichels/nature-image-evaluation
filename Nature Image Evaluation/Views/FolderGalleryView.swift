@@ -26,6 +26,7 @@ struct FolderGalleryView: View {
     @State private var detailViewImage: ImageEvaluation?  // For showing detail view
     @State private var sortOption: SortOption = .name
     @State private var filterOption: FilterOption = .all
+    @State private var cachedFilteredImages: [URL] = []  // Cache sorted/filtered results
 
     // Grid layout
     private let columns = [
@@ -60,10 +61,16 @@ struct FolderGalleryView: View {
 
     // MARK: - Computed Properties
 
-    private var filteredAndSortedImages: [URL] {
+    private func updateFilteredImages() {
+        // Build evaluation cache once to avoid repeated lookups
+        var evaluationCache: [URL: ImageEvaluation?] = [:]
+        for url in folderImages {
+            evaluationCache[url] = existingEvaluation(for: url)
+        }
+
         // First, filter the images
         let filtered = folderImages.filter { url in
-            let evaluation = existingEvaluation(for: url)
+            let evaluation = evaluationCache[url] ?? nil
 
             switch filterOption {
             case .all:
@@ -81,17 +88,25 @@ struct FolderGalleryView: View {
             }
         }
 
+        // Cache file dates if sorting by date to avoid repeated file system access
+        var dateCache: [URL: Date] = [:]
+        if sortOption == .dateModified {
+            for url in filtered {
+                dateCache[url] = (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date) ?? Date.distantPast
+            }
+        }
+
         // Then sort them
-        return filtered.sorted { url1, url2 in
-            let eval1 = existingEvaluation(for: url1)
-            let eval2 = existingEvaluation(for: url2)
+        cachedFilteredImages = filtered.sorted { url1, url2 in
+            let eval1 = evaluationCache[url1] ?? nil
+            let eval2 = evaluationCache[url2] ?? nil
 
             switch sortOption {
             case .name:
                 return url1.lastPathComponent < url2.lastPathComponent
             case .dateModified:
-                let date1 = (try? FileManager.default.attributesOfItem(atPath: url1.path)[.modificationDate] as? Date) ?? Date.distantPast
-                let date2 = (try? FileManager.default.attributesOfItem(atPath: url2.path)[.modificationDate] as? Date) ?? Date.distantPast
+                let date1 = dateCache[url1] ?? Date.distantPast
+                let date2 = dateCache[url2] ?? Date.distantPast
                 return date1 > date2
             case .overallScore:
                 let score1 = eval1?.currentEvaluation?.overallWeightedScore ?? -1
@@ -113,7 +128,7 @@ struct FolderGalleryView: View {
         VStack(spacing: 0) {
             // Toolbar
             HStack(spacing: 16) {
-                Text("\(filteredAndSortedImages.count) images")
+                Text("\(cachedFilteredImages.count) images")
                     .foregroundStyle(.secondary)
 
                 Divider()
@@ -180,7 +195,7 @@ struct FolderGalleryView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if filteredAndSortedImages.isEmpty {
+            } else if cachedFilteredImages.isEmpty {
                 VStack(spacing: 20) {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 60))
@@ -201,7 +216,7 @@ struct FolderGalleryView: View {
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(filteredAndSortedImages, id: \.self) { imageURL in
+                        ForEach(cachedFilteredImages, id: \.self) { imageURL in
                             FolderImageThumbnail(
                                 url: imageURL,
                                 isSelected: selectedImages.contains(imageURL),
@@ -228,6 +243,15 @@ struct FolderGalleryView: View {
         }
         .task {
             await loadFolderImages()
+        }
+        .onChange(of: sortOption) { _, _ in
+            updateFilteredImages()
+        }
+        .onChange(of: filterOption) { _, _ in
+            updateFilteredImages()
+        }
+        .onChange(of: evaluationCompletedCount) { _, _ in
+            updateFilteredImages()
         }
         .onDisappear {
             // Stop accessing the security-scoped folder when view disappears
@@ -309,6 +333,7 @@ struct FolderGalleryView: View {
             let images = try FolderManager.shared.scanFolder(folder)
             await MainActor.run {
                 folderImages = images
+                updateFilteredImages()
                 isLoadingImages = false
             }
         } catch {
