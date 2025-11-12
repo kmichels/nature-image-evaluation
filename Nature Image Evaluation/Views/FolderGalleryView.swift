@@ -1,0 +1,299 @@
+//
+//  FolderGalleryView.swift
+//  Nature Image Evaluation
+//
+//  Created by Claude on 11/12/25.
+//
+
+import SwiftUI
+import CoreData
+
+struct FolderGalleryView: View {
+    let folder: MonitoredFolder
+    @Environment(\.managedObjectContext) private var viewContext
+
+    // Core Data fetch for existing evaluations
+    @FetchRequest private var existingEvaluations: FetchedResults<ImageEvaluation>
+
+    @State private var folderImages: [URL] = []
+    @State private var isLoadingImages = true
+    @State private var loadError: Error?
+    @State private var selectedImages: Set<URL> = []
+    @State private var showingEvaluationSheet = false
+    @State private var evaluationManager = EvaluationManager()
+
+    // Grid layout
+    private let columns = [
+        GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 20)
+    ]
+
+    init(folder: MonitoredFolder) {
+        self.folder = folder
+        // Fetch evaluations for this folder's images
+        self._existingEvaluations = FetchRequest(
+            sortDescriptors: [NSSortDescriptor(keyPath: \ImageEvaluation.dateAdded, ascending: false)],
+            animation: .default
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Toolbar
+            HStack {
+                Text("\(folderImages.count) images")
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if !selectedImages.isEmpty {
+                    Text("\(selectedImages.count) selected")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                }
+
+                Button("Evaluate Selected") {
+                    startEvaluation()
+                }
+                .disabled(selectedImages.isEmpty || evaluationManager.isProcessing)
+
+                Button("Refresh") {
+                    Task {
+                        await loadFolderImages()
+                    }
+                }
+            }
+            .padding()
+            .background(Color(NSColor.windowBackgroundColor))
+
+            Divider()
+
+            // Main content
+            if isLoadingImages {
+                ProgressView("Loading images...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error = loadError {
+                VStack(spacing: 20) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 60))
+                        .foregroundStyle(.red)
+                    Text("Error loading folder")
+                        .font(.title2)
+                    Text(error.localizedDescription)
+                        .foregroundStyle(.secondary)
+                    Button("Try Again") {
+                        Task {
+                            await loadFolderImages()
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if folderImages.isEmpty {
+                VStack(spacing: 20) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 60))
+                        .foregroundStyle(.tertiary)
+                    Text("No images in this folder")
+                        .font(.title2)
+                    Text(folder.name)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 20) {
+                        ForEach(folderImages, id: \.self) { imageURL in
+                            FolderImageThumbnail(
+                                url: imageURL,
+                                isSelected: selectedImages.contains(imageURL),
+                                existingEvaluation: existingEvaluation(for: imageURL)
+                            ) {
+                                toggleSelection(imageURL)
+                            }
+                        }
+                    }
+                    .padding()
+                }
+            }
+
+            // Status bar for evaluation
+            if evaluationManager.isProcessing {
+                EvaluationStatusBar(manager: evaluationManager)
+            }
+        }
+        .task {
+            await loadFolderImages()
+        }
+        .sheet(isPresented: $showingEvaluationSheet) {
+            // TODO: Create evaluation workflow for folder images
+            Text("Evaluation coming soon")
+                .padding()
+        }
+    }
+
+    // MARK: - Helper Methods
+
+    private func loadFolderImages() async {
+        isLoadingImages = true
+        loadError = nil
+
+        do {
+            let images = try FolderManager.shared.scanFolder(folder)
+            await MainActor.run {
+                folderImages = images
+                isLoadingImages = false
+            }
+        } catch {
+            await MainActor.run {
+                loadError = error
+                isLoadingImages = false
+            }
+        }
+    }
+
+    private func toggleSelection(_ url: URL) {
+        if selectedImages.contains(url) {
+            selectedImages.remove(url)
+        } else {
+            selectedImages.insert(url)
+        }
+    }
+
+    private func existingEvaluation(for url: URL) -> ImageEvaluation? {
+        // Find if this image has already been evaluated
+        let filename = url.lastPathComponent
+        return existingEvaluations.first { evaluation in
+            if let bookmarkData = evaluation.originalFilePath,
+               let data = Data(base64Encoded: bookmarkData) {
+                var isStale = false
+                if let evaluationURL = try? URL(resolvingBookmarkData: data, bookmarkDataIsStale: &isStale),
+                   evaluationURL.lastPathComponent == filename {
+                    return true
+                }
+            }
+            return false
+        }
+    }
+
+    private func startEvaluation() {
+        // Convert selected URLs to ImageEvaluation objects for the evaluator
+        // This would need to create or find existing ImageEvaluation objects
+        // For now, show the evaluation sheet
+        showingEvaluationSheet = true
+    }
+}
+
+// MARK: - Thumbnail View
+
+struct FolderImageThumbnail: View {
+    let url: URL
+    let isSelected: Bool
+    let existingEvaluation: ImageEvaluation?
+    let onTap: () -> Void
+
+    @State private var thumbnail: NSImage?
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack(alignment: .topLeading) {
+                // Image
+                Group {
+                    if let thumbnail = thumbnail {
+                        Image(nsImage: thumbnail)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.2))
+                            .overlay(
+                                ProgressView()
+                                    .controlSize(.small)
+                            )
+                    }
+                }
+                .frame(width: 150, height: 150)
+                .cornerRadius(8)
+
+                // Selection indicator
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.white, .blue)
+                        .background(Circle().fill(.black.opacity(0.5)))
+                        .padding(8)
+                }
+
+                // Evaluation badge if exists
+                if let evaluation = existingEvaluation,
+                   let result = evaluation.currentEvaluation {
+                    VStack(spacing: 2) {
+                        HStack(spacing: 4) {
+                            VStack(spacing: 1) {
+                                Text("A")
+                                    .font(.system(size: 8))
+                                Text(String(format: "%.1f", result.artisticScore))
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                            .frame(width: 28)
+
+                            Divider()
+                                .frame(height: 20)
+
+                            VStack(spacing: 1) {
+                                Text("C")
+                                    .font(.system(size: 8))
+                                Text(String(format: "%.1f", result.sellabilityScore))
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                            .frame(width: 28)
+                        }
+                        .foregroundStyle(.white)
+                    }
+                    .padding(4)
+                    .background(scoreColor(result.overallWeightedScore).opacity(0.9))
+                    .cornerRadius(4)
+                    .offset(x: 90, y: 110)
+                }
+            }
+
+            // Filename
+            Text(url.lastPathComponent)
+                .font(.caption)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .foregroundStyle(isSelected ? .blue : .primary)
+        }
+        .onTapGesture {
+            onTap()
+        }
+        .task {
+            await loadThumbnail()
+        }
+    }
+
+    private func loadThumbnail() async {
+        guard let image = NSImage(contentsOf: url) else { return }
+
+        // Create thumbnail
+        let targetSize = NSSize(width: 150, height: 150)
+        let thumbnail = NSImage(size: targetSize)
+        thumbnail.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: targetSize),
+                  from: NSRect(origin: .zero, size: image.size),
+                  operation: .copy,
+                  fraction: 1.0)
+        thumbnail.unlockFocus()
+
+        await MainActor.run {
+            self.thumbnail = thumbnail
+        }
+    }
+
+    private func scoreColor(_ score: Double) -> Color {
+        switch score {
+        case 8...: return .green
+        case 6..<8: return .blue
+        case 4..<6: return .orange
+        default: return .red
+        }
+    }
+}
