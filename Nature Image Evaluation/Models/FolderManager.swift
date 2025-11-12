@@ -11,13 +11,14 @@ import UniformTypeIdentifiers
 
 /// Represents a monitored folder in the sidebar
 struct MonitoredFolder: Identifiable, Codable, Hashable {
-    let id = UUID()
+    let id: UUID
     let name: String
     let bookmarkData: Data  // Security-scoped bookmark
     let dateAdded: Date
     var color: String  // Store as string for Codable
 
     init(url: URL, color: Color = .blue) throws {
+        self.id = UUID()
         self.name = url.lastPathComponent
         self.dateAdded = Date()
         self.color = color.description
