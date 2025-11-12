@@ -18,7 +18,7 @@ struct ContentView: View {
     private var imageEvaluations: FetchedResults<ImageEvaluation>
 
     @State private var showingSettings = false
-    @State private var selectedSidebarItem: SidebarItem? = .quickAnalysis
+    @State private var selectedSidebarItem: SidebarItem?
     @State private var folderManager = FolderManager.shared
     @State private var showingFolderPicker = false
 
@@ -26,6 +26,18 @@ struct ContentView: View {
         case quickAnalysis
         case folder(MonitoredFolder)
         case settings
+
+        // Helper for saving/loading selection
+        var storageKey: String {
+            switch self {
+            case .quickAnalysis:
+                return "quickAnalysis"
+            case .folder(let folder):
+                return "folder:\(folder.id.uuidString)"
+            case .settings:
+                return "settings"
+            }
+        }
     }
 
     var body: some View {
@@ -46,6 +58,11 @@ struct ContentView: View {
                         }
                         .contextMenu {
                             Button(role: .destructive) {
+                                // If we're removing the currently selected folder, clear selection
+                                if case .folder(let selectedFolder) = selectedSidebarItem,
+                                   selectedFolder.id == folder.id {
+                                    selectedSidebarItem = .quickAnalysis
+                                }
                                 folderManager.removeFolder(folder)
                             } label: {
                                 Label("Remove Folder", systemImage: "trash")
@@ -118,6 +135,50 @@ struct ContentView: View {
             case .failure(let error):
                 print("Error selecting folder: \(error)")
             }
+        }
+        .onAppear {
+            loadSelectedSidebarItem()
+        }
+        .onChange(of: selectedSidebarItem) { oldValue, newValue in
+            saveSelectedSidebarItem()
+        }
+    }
+
+    // MARK: - Persistence Methods
+
+    private func saveSelectedSidebarItem() {
+        if let item = selectedSidebarItem {
+            UserDefaults.standard.set(item.storageKey, forKey: "selectedSidebarItem")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "selectedSidebarItem")
+        }
+    }
+
+    private func loadSelectedSidebarItem() {
+        guard let savedKey = UserDefaults.standard.string(forKey: "selectedSidebarItem") else {
+            // Default to Quick Analysis if nothing saved
+            selectedSidebarItem = .quickAnalysis
+            return
+        }
+
+        // Parse the saved key
+        if savedKey == "quickAnalysis" {
+            selectedSidebarItem = .quickAnalysis
+        } else if savedKey == "settings" {
+            selectedSidebarItem = .settings
+        } else if savedKey.hasPrefix("folder:") {
+            // Extract the folder ID
+            let folderIDString = String(savedKey.dropFirst(7))
+            if let folderID = UUID(uuidString: folderIDString),
+               let folder = folderManager.folders.first(where: { $0.id == folderID }) {
+                selectedSidebarItem = .folder(folder)
+            } else {
+                // Folder no longer exists, default to Quick Analysis
+                selectedSidebarItem = .quickAnalysis
+            }
+        } else {
+            // Unknown saved value, default to Quick Analysis
+            selectedSidebarItem = .quickAnalysis
         }
     }
 }
