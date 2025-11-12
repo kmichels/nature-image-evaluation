@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreData
+import AppKit
 
 struct ImageDetailView: View {
     let evaluation: ImageEvaluation
@@ -402,51 +403,100 @@ struct ImageDetailView: View {
                                 // Title & Description
                                 if let title = result.title {
                                     DetailSection(title: "Title", icon: "text.badge.star", color: .blue) {
-                                        Text(title)
-                                            .font(.title3.bold())
-                                            .textSelection(.enabled)
+                                        HStack {
+                                            Text(title)
+                                                .font(.title3.bold())
+                                                .textSelection(.enabled)
+                                            Spacer()
+                                            Button(action: {
+                                                copyToClipboard(title)
+                                            }) {
+                                                Image(systemName: "doc.on.doc")
+                                                    .font(.system(size: 14))
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .help("Copy to clipboard")
+                                        }
                                     }
                                 }
 
                                 if let description = result.descriptionText {
                                     DetailSection(title: "Description", icon: "text.alignleft", color: .green) {
-                                        Text(description)
-                                            .font(.body)
-                                            .textSelection(.enabled)
+                                        HStack(alignment: .top) {
+                                            Text(description)
+                                                .font(.body)
+                                                .textSelection(.enabled)
+                                            Spacer()
+                                            Button(action: {
+                                                copyToClipboard(description)
+                                            }) {
+                                                Image(systemName: "doc.on.doc")
+                                                    .font(.system(size: 14))
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .help("Copy to clipboard")
+                                        }
                                     }
                                 }
 
-                                // Alt Text
-                                if let altText = result.altText {
-                                    DetailSection(title: "Alt Text", icon: "accessibility", color: .orange) {
-                                        Text(altText)
-                                            .font(.body)
-                                            .textSelection(.enabled)
-                                    }
-                                }
-
-                                // Keywords
+                                // Keywords (moved above Alt Text)
                                 if let keywords = result.keywords, !keywords.isEmpty {
                                     DetailSection(title: "Keywords (\(keywords.count))", icon: "tag.fill", color: .purple) {
-                                        ScrollView(.horizontal, showsIndicators: false) {
-                                            HStack(spacing: 8) {
-                                                ForEach(keywords, id: \.self) { keyword in
-                                                    Text(keyword)
-                                                        .font(.caption)
-                                                        .padding(.horizontal, 8)
-                                                        .padding(.vertical, 4)
-                                                        .background(Color.purple.opacity(0.1))
-                                                        .cornerRadius(4)
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            ScrollView(.horizontal, showsIndicators: false) {
+                                                HStack(spacing: 8) {
+                                                    ForEach(keywords, id: \.self) { keyword in
+                                                        Text(keyword)
+                                                            .font(.caption)
+                                                            .padding(.horizontal, 8)
+                                                            .padding(.vertical, 4)
+                                                            .background(Color.purple.opacity(0.1))
+                                                            .cornerRadius(4)
+                                                    }
                                                 }
                                             }
-                                        }
 
-                                        // Copyable keywords list
-                                        Text(keywords.joined(separator: ", "))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .textSelection(.enabled)
-                                            .padding(.top, 4)
+                                            // Copyable keywords list with copy button
+                                            HStack(alignment: .top) {
+                                                Text(keywords.joined(separator: ", "))
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                    .textSelection(.enabled)
+                                                Spacer()
+                                                Button(action: {
+                                                    copyToClipboard(keywords.joined(separator: ", "))
+                                                }) {
+                                                    Image(systemName: "doc.on.doc")
+                                                        .font(.system(size: 14))
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                .buttonStyle(.plain)
+                                                .help("Copy keywords to clipboard")
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Alt Text (moved below Keywords)
+                                if let altText = result.altText {
+                                    DetailSection(title: "Alt Text", icon: "accessibility", color: .orange) {
+                                        HStack(alignment: .top) {
+                                            Text(altText)
+                                                .font(.body)
+                                                .textSelection(.enabled)
+                                            Spacer()
+                                            Button(action: {
+                                                copyToClipboard(altText)
+                                            }) {
+                                                Image(systemName: "doc.on.doc")
+                                                    .font(.system(size: 14))
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .help("Copy to clipboard")
+                                        }
                                     }
                                 }
 
@@ -659,6 +709,12 @@ struct ImageDetailView: View {
         case 0.5..<0.7: return "High"
         default: return "Very High"
         }
+    }
+
+    private func copyToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 }
 
