@@ -21,6 +21,7 @@ struct FolderGalleryView: View {
     @State private var selectedImages: Set<URL> = []
     @State private var showingEvaluationSheet = false
     @State private var evaluationManager = EvaluationManager()
+    @State private var folderURL: URL?  // Store resolved folder URL for security scope
 
     // Grid layout
     private let columns = [
@@ -123,6 +124,10 @@ struct FolderGalleryView: View {
         .task {
             await loadFolderImages()
         }
+        .onDisappear {
+            // Stop accessing the security-scoped folder when view disappears
+            folderURL?.stopAccessingSecurityScopedResource()
+        }
         .sheet(isPresented: $showingEvaluationSheet) {
             // TODO: Create evaluation workflow for folder images
             Text("Evaluation coming soon")
@@ -137,6 +142,19 @@ struct FolderGalleryView: View {
         loadError = nil
 
         do {
+            // Resolve and store the folder URL with security scope
+            let url = try folder.resolveURL()
+
+            // Start accessing for the duration of this view
+            guard url.startAccessingSecurityScopedResource() else {
+                throw FolderError.accessDenied
+            }
+
+            // Store the URL so we can stop accessing later
+            await MainActor.run {
+                self.folderURL = url
+            }
+
             let images = try FolderManager.shared.scanFolder(folder)
             await MainActor.run {
                 folderImages = images
@@ -271,20 +289,53 @@ struct FolderImageThumbnail: View {
     }
 
     private func loadThumbnail() async {
-        guard let image = NSImage(contentsOf: url) else { return }
+        // Try loading image - parent folder should have security scope
+        var loadedImage: NSImage?
+
+        if let image = NSImage(contentsOf: url) {
+            loadedImage = image
+        } else {
+            // If regular loading fails, try with explicit security scope
+            print("Failed initial load, trying with security scope: \(url.lastPathComponent)")
+            guard url.startAccessingSecurityScopedResource() else {
+                print("Failed to access image for thumbnail: \(url.lastPathComponent)")
+                return
+            }
+            defer { url.stopAccessingSecurityScopedResource() }
+
+            loadedImage = NSImage(contentsOf: url)
+            if loadedImage == nil {
+                print("Still failed to load image: \(url.lastPathComponent)")
+                return
+            }
+        }
+
+        guard let image = loadedImage else { return }
 
         // Create thumbnail
         let targetSize = NSSize(width: 150, height: 150)
-        let thumbnail = NSImage(size: targetSize)
-        thumbnail.lockFocus()
-        image.draw(in: NSRect(origin: .zero, size: targetSize),
-                  from: NSRect(origin: .zero, size: image.size),
+        let thumbnailImage = NSImage(size: targetSize)
+        thumbnailImage.lockFocus()
+
+        // Calculate aspect-fit rect
+        let imageSize = image.size
+        let scale = min(targetSize.width / imageSize.width, targetSize.height / imageSize.height)
+        let scaledSize = NSSize(width: imageSize.width * scale, height: imageSize.height * scale)
+        let drawRect = NSRect(
+            x: (targetSize.width - scaledSize.width) / 2,
+            y: (targetSize.height - scaledSize.height) / 2,
+            width: scaledSize.width,
+            height: scaledSize.height
+        )
+
+        image.draw(in: drawRect,
+                  from: NSRect(origin: .zero, size: imageSize),
                   operation: .copy,
                   fraction: 1.0)
-        thumbnail.unlockFocus()
+        thumbnailImage.unlockFocus()
 
         await MainActor.run {
-            self.thumbnail = thumbnail
+            self.thumbnail = thumbnailImage
         }
     }
 
