@@ -24,11 +24,30 @@ struct FolderGalleryView: View {
     @State private var folderURL: URL?  // Store resolved folder URL for security scope
     @State private var evaluationCompletedCount = 0  // Trigger view refresh
     @State private var detailViewImage: ImageEvaluation?  // For showing detail view
+    @State private var sortOption: SortOption = .name
+    @State private var filterOption: FilterOption = .all
 
     // Grid layout
     private let columns = [
         GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 20)
     ]
+
+    enum SortOption: String, CaseIterable {
+        case name = "Name"
+        case dateModified = "Date Modified"
+        case overallScore = "Overall Score"
+        case sellability = "Sellability"
+        case artisticScore = "Artistic Score"
+    }
+
+    enum FilterOption: String, CaseIterable {
+        case all = "All Images"
+        case evaluated = "Evaluated"
+        case notEvaluated = "Not Evaluated"
+        case portfolio = "Portfolio"
+        case store = "Store"
+        case both = "Both (Portfolio & Store)"
+    }
 
     init(folder: MonitoredFolder) {
         self.folder = folder
@@ -39,12 +58,83 @@ struct FolderGalleryView: View {
         )
     }
 
+    // MARK: - Computed Properties
+
+    private var filteredAndSortedImages: [URL] {
+        // First, filter the images
+        let filtered = folderImages.filter { url in
+            let evaluation = existingEvaluation(for: url)
+
+            switch filterOption {
+            case .all:
+                return true
+            case .evaluated:
+                return evaluation?.currentEvaluation != nil
+            case .notEvaluated:
+                return evaluation == nil || evaluation?.currentEvaluation == nil
+            case .portfolio:
+                return evaluation?.currentEvaluation?.primaryPlacement == "PORTFOLIO"
+            case .store:
+                return evaluation?.currentEvaluation?.primaryPlacement == "STORE"
+            case .both:
+                return evaluation?.currentEvaluation?.primaryPlacement == "BOTH"
+            }
+        }
+
+        // Then sort them
+        return filtered.sorted { url1, url2 in
+            let eval1 = existingEvaluation(for: url1)
+            let eval2 = existingEvaluation(for: url2)
+
+            switch sortOption {
+            case .name:
+                return url1.lastPathComponent < url2.lastPathComponent
+            case .dateModified:
+                let date1 = (try? FileManager.default.attributesOfItem(atPath: url1.path)[.modificationDate] as? Date) ?? Date.distantPast
+                let date2 = (try? FileManager.default.attributesOfItem(atPath: url2.path)[.modificationDate] as? Date) ?? Date.distantPast
+                return date1 > date2
+            case .overallScore:
+                let score1 = eval1?.currentEvaluation?.overallWeightedScore ?? -1
+                let score2 = eval2?.currentEvaluation?.overallWeightedScore ?? -1
+                return score1 > score2
+            case .sellability:
+                let score1 = eval1?.currentEvaluation?.sellabilityScore ?? -1
+                let score2 = eval2?.currentEvaluation?.sellabilityScore ?? -1
+                return score1 > score2
+            case .artisticScore:
+                let score1 = eval1?.currentEvaluation?.artisticScore ?? -1
+                let score2 = eval2?.currentEvaluation?.artisticScore ?? -1
+                return score1 > score2
+            }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar
-            HStack {
-                Text("\(folderImages.count) images")
+            HStack(spacing: 16) {
+                Text("\(filteredAndSortedImages.count) images")
                     .foregroundStyle(.secondary)
+
+                Divider()
+                    .frame(height: 20)
+
+                // Filter and Sort
+                Picker("Filter", selection: $filterOption) {
+                    ForEach(FilterOption.allCases, id: \.self) { option in
+                        Text(option.rawValue).tag(option)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 150)
+
+                Picker("Sort", selection: $sortOption) {
+                    ForEach(SortOption.allCases, id: \.self) { option in
+                        Text(option.rawValue).tag(option)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 150)
 
                 Spacer()
 
@@ -90,21 +180,28 @@ struct FolderGalleryView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if folderImages.isEmpty {
+            } else if filteredAndSortedImages.isEmpty {
                 VStack(spacing: 20) {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.system(size: 60))
                         .foregroundStyle(.tertiary)
-                    Text("No images in this folder")
-                        .font(.title2)
-                    Text(folder.name)
-                        .foregroundStyle(.secondary)
+                    if folderImages.isEmpty {
+                        Text("No images in this folder")
+                            .font(.title2)
+                        Text(folder.name)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("No images match filter")
+                            .font(.title2)
+                        Text("Try changing the filter to see more images")
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(folderImages, id: \.self) { imageURL in
+                        ForEach(filteredAndSortedImages, id: \.self) { imageURL in
                             FolderImageThumbnail(
                                 url: imageURL,
                                 isSelected: selectedImages.contains(imageURL),
