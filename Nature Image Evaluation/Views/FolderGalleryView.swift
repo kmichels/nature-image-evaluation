@@ -27,6 +27,7 @@ struct FolderGalleryView: View {
     @State private var sortOption: SortOption = .name
     @State private var filterOption: FilterOption = .all
     @State private var cachedFilteredImages: [URL] = []  // Cache sorted/filtered results
+    @State private var thumbnailCache: [URL: NSImage] = [:]  // Cache thumbnails
 
     // Grid layout
     private let columns = [
@@ -221,6 +222,7 @@ struct FolderGalleryView: View {
                                 url: imageURL,
                                 isSelected: selectedImages.contains(imageURL),
                                 existingEvaluation: existingEvaluation(for: imageURL),
+                                thumbnail: thumbnailCache[imageURL],
                                 onTap: {
                                     toggleSelection(imageURL)
                                 },
@@ -228,6 +230,9 @@ struct FolderGalleryView: View {
                                     if let evaluation = existingEvaluation(for: imageURL) {
                                         showDetailView(evaluation)
                                     }
+                                },
+                                onThumbnailLoaded: { image in
+                                    thumbnailCache[imageURL] = image
                                 }
                             )
                         }
@@ -256,6 +261,8 @@ struct FolderGalleryView: View {
         .onDisappear {
             // Stop accessing the security-scoped folder when view disappears
             folderURL?.stopAccessingSecurityScopedResource()
+            // Clear thumbnail cache to free memory
+            thumbnailCache.removeAll()
         }
         .sheet(isPresented: $showingEvaluationSheet) {
             @Bindable var manager = evaluationManager
@@ -521,10 +528,12 @@ struct FolderImageThumbnail: View {
     let url: URL
     let isSelected: Bool
     let existingEvaluation: ImageEvaluation?
+    let thumbnail: NSImage?  // Passed from parent
     let onTap: () -> Void
     let onDoubleTap: () -> Void
+    let onThumbnailLoaded: ((NSImage) -> Void)?
 
-    @State private var thumbnail: NSImage?
+    @State private var isLoadingThumbnail = false
 
     var body: some View {
         VStack(spacing: 8) {
@@ -535,13 +544,16 @@ struct FolderImageThumbnail: View {
                         Image(nsImage: thumbnail)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                    } else {
+                    } else if isLoadingThumbnail {
                         Rectangle()
                             .fill(Color.gray.opacity(0.2))
                             .overlay(
                                 ProgressView()
                                     .controlSize(.small)
                             )
+                    } else {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.2))
                     }
                 }
                 .frame(width: 150, height: 150)
@@ -603,14 +615,24 @@ struct FolderImageThumbnail: View {
             onTap()
         }
         .task {
-            await loadThumbnail()
+            // Only load thumbnail if we don't have one cached
+            if thumbnail == nil && !isLoadingThumbnail {
+                await loadThumbnail()
+            }
         }
     }
 
     private func loadThumbnail() async {
+        await MainActor.run {
+            isLoadingThumbnail = true
+        }
+
         // Load image - parent folder already has security scope
         guard let image = NSImage(contentsOf: url) else {
             print("Failed to load image for thumbnail: \(url.lastPathComponent)")
+            await MainActor.run {
+                isLoadingThumbnail = false
+            }
             return
         }
 
@@ -637,7 +659,9 @@ struct FolderImageThumbnail: View {
         thumbnailImage.unlockFocus()
 
         await MainActor.run {
-            self.thumbnail = thumbnailImage
+            isLoadingThumbnail = false
+            // Notify parent to cache this thumbnail
+            onThumbnailLoaded?(thumbnailImage)
         }
     }
 
