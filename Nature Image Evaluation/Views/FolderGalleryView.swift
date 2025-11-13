@@ -369,7 +369,8 @@ struct FolderGalleryView: View {
 
         // Find if this image has already been evaluated
         let filename = url.lastPathComponent
-        return existingEvaluations.first { evaluation in
+        print("🔍 Looking up evaluation for: \(filename)")
+        let result = existingEvaluations.first { evaluation in
             if let bookmarkData = evaluation.originalFilePath,
                let data = Data(base64Encoded: bookmarkData) {
                 var isStale = false
@@ -380,6 +381,8 @@ struct FolderGalleryView: View {
             }
             return false
         }
+        print("   → Found: \(result != nil)")
+        return result
     }
 
     private func startEvaluation() {
@@ -623,45 +626,79 @@ struct FolderImageThumbnail: View {
     }
 
     private func loadThumbnail() async {
+        let startTime = Date()
+        print("🔵 Starting thumbnail load for: \(url.lastPathComponent)")
+
         await MainActor.run {
             isLoadingThumbnail = true
         }
 
-        // Load image - parent folder already has security scope
-        guard let image = NSImage(contentsOf: url) else {
-            print("Failed to load image for thumbnail: \(url.lastPathComponent)")
-            await MainActor.run {
-                isLoadingThumbnail = false
+        // Do all image processing off the main thread
+        let thumbnailImage = await Task.detached(priority: .userInitiated) { () -> NSImage? in
+            // Load image - parent folder already has security scope
+            guard let image = NSImage(contentsOf: url) else {
+                print("❌ Failed to load image for thumbnail: \(url.lastPathComponent)")
+                return nil
             }
-            return
-        }
 
-        // Create thumbnail
-        let targetSize = NSSize(width: 150, height: 150)
-        let thumbnailImage = NSImage(size: targetSize)
-        thumbnailImage.lockFocus()
+            print("📊 Loaded image: \(url.lastPathComponent) - Size: \(image.size)")
 
-        // Calculate aspect-fit rect
-        let imageSize = image.size
-        let scale = min(targetSize.width / imageSize.width, targetSize.height / imageSize.height)
-        let scaledSize = NSSize(width: imageSize.width * scale, height: imageSize.height * scale)
-        let drawRect = NSRect(
-            x: (targetSize.width - scaledSize.width) / 2,
-            y: (targetSize.height - scaledSize.height) / 2,
-            width: scaledSize.width,
-            height: scaledSize.height
-        )
+            // Create thumbnail off main thread
+            let targetSize = NSSize(width: 150, height: 150)
 
-        image.draw(in: drawRect,
-                  from: NSRect(origin: .zero, size: imageSize),
-                  operation: .copy,
-                  fraction: 1.0)
-        thumbnailImage.unlockFocus()
+            // Use CGImage for better performance
+            var proposedRect = NSRect(origin: .zero, size: image.size)
+            guard let cgImage = image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil) else {
+                return nil
+            }
+
+            let aspectRatio = Double(cgImage.width) / Double(cgImage.height)
+            let targetWidth: Double
+            let targetHeight: Double
+
+            if aspectRatio > 1 {
+                targetWidth = 150
+                targetHeight = 150 / aspectRatio
+            } else {
+                targetWidth = 150 * aspectRatio
+                targetHeight = 150
+            }
+
+            // Create thumbnail using Core Graphics (faster than NSImage drawing)
+            let colorSpace = CGColorSpaceCreateDeviceRGB()
+            let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+
+            guard let context = CGContext(
+                data: nil,
+                width: Int(targetWidth),
+                height: Int(targetHeight),
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: bitmapInfo.rawValue
+            ) else {
+                return nil
+            }
+
+            context.interpolationQuality = .high
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
+
+            guard let thumbnailCGImage = context.makeImage() else {
+                return nil
+            }
+
+            return NSImage(cgImage: thumbnailCGImage, size: NSSize(width: targetWidth, height: targetHeight))
+        }.value
+
+        let loadTime = Date().timeIntervalSince(startTime)
+        print("⏱️ Thumbnail load time for \(url.lastPathComponent): \(String(format: "%.3f", loadTime))s")
 
         await MainActor.run {
             isLoadingThumbnail = false
-            // Notify parent to cache this thumbnail
-            onThumbnailLoaded?(thumbnailImage)
+            if let thumbnailImage = thumbnailImage {
+                // Notify parent to cache this thumbnail
+                onThumbnailLoaded?(thumbnailImage)
+            }
         }
     }
 
