@@ -35,6 +35,7 @@ struct GalleryView: View {
     @State private var sortOption: SortOption = .dateAdded
     @State private var filterOption: FilterOption = .all
     @State private var showingDeleteConfirmation = false
+    @State private var showOnlySelected = false  // Toggle to show only selected images
 
     // Evaluation state
     @State private var evaluationManager = {
@@ -179,11 +180,19 @@ struct GalleryView: View {
                 .cornerRadius(8)
                 .frame(maxWidth: 250)
 
-                // Selection Info
+                // Selection Info and Toggle
                 if !selectedImages.isEmpty {
                     Text("\(selectedImages.count) selected")
                         .foregroundStyle(.secondary)
                         .font(.caption)
+
+                    Button(action: {
+                        showOnlySelected.toggle()
+                    }) {
+                        Label(showOnlySelected ? "Show All" : "Show Selected",
+                              systemImage: showOnlySelected ? "rectangle.grid.2x2" : "checkmark.rectangle.stack")
+                    }
+                    .disabled(selectedImages.isEmpty)
                 }
             }
             .padding()
@@ -321,12 +330,20 @@ struct GalleryView: View {
         } message: {
             Text("Are you sure you want to delete \(selectedImages.count) selected image\(selectedImages.count == 1 ? "" : "s")? This will remove the image data and all evaluation results. This action cannot be undone.")
         }
+        .onChange(of: selectedImages) { _, _ in
+            // If no images selected, turn off selection filter
+            if selectedImages.isEmpty && showOnlySelected {
+                showOnlySelected = false
+            }
+        }
     }
 
     // MARK: - Computed Properties
 
     private var filteredImages: [ImageEvaluation] {
-        imageEvaluations
+        let baseImages = showOnlySelected ? Array(selectedImages) : Array(imageEvaluations)
+
+        return baseImages
             .filter { filterOption.matches($0) }
             .filter { searchText.isEmpty || matchesSearch($0) }
             .sorted(by: sortOption.sortDescriptor)
@@ -484,6 +501,8 @@ struct GalleryView: View {
             try viewContext.save()
             // Clear selection after deletion
             selectedImages.removeAll()
+            // Reset selection filter
+            showOnlySelected = false
         } catch {
             print("Error deleting images: \(error)")
         }

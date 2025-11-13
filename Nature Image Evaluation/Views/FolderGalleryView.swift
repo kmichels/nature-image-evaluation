@@ -28,6 +28,7 @@ struct FolderGalleryView: View {
     @State private var filterOption: FilterOption = .all
     @State private var cachedFilteredImages: [URL] = []  // Cache sorted/filtered results
     @State private var thumbnailCache: [URL: NSImage] = [:]  // Cache thumbnails
+    @State private var showOnlySelected = false  // Toggle to show only selected images
 
     // Grid layout
     private let columns = [
@@ -69,8 +70,11 @@ struct FolderGalleryView: View {
             evaluationCache[url] = existingEvaluation(for: url)
         }
 
-        // First, filter the images
-        let filtered = folderImages.filter { url in
+        // First, apply selection filter if enabled
+        let baseImages = showOnlySelected ? Array(selectedImages) : folderImages
+
+        // Then, filter the images
+        let filtered = baseImages.filter { url in
             let evaluation = evaluationCache[url] ?? nil
 
             switch filterOption {
@@ -158,6 +162,15 @@ struct FolderGalleryView: View {
                     Text("\(selectedImages.count) selected")
                         .foregroundStyle(.secondary)
                         .font(.caption)
+
+                    Button(action: {
+                        showOnlySelected.toggle()
+                        updateFilteredImages()
+                    }) {
+                        Label(showOnlySelected ? "Show All" : "Show Selected",
+                              systemImage: showOnlySelected ? "rectangle.grid.2x2" : "checkmark.rectangle.stack")
+                    }
+                    .disabled(selectedImages.isEmpty)
                 }
 
                 Button("Evaluate Selected") {
@@ -258,11 +271,20 @@ struct FolderGalleryView: View {
         .onChange(of: evaluationCompletedCount) { _, _ in
             updateFilteredImages()
         }
+        .onChange(of: selectedImages) { _, _ in
+            // If no images selected, turn off selection filter
+            if selectedImages.isEmpty && showOnlySelected {
+                showOnlySelected = false
+                updateFilteredImages()
+            }
+        }
         .onDisappear {
             // Stop accessing the security-scoped folder when view disappears
             folderURL?.stopAccessingSecurityScopedResource()
             // Clear thumbnail cache to free memory
             thumbnailCache.removeAll()
+            // Reset selection filter
+            showOnlySelected = false
         }
         .sheet(isPresented: $showingEvaluationSheet) {
             @Bindable var manager = evaluationManager
