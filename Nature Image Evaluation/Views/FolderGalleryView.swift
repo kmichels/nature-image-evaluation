@@ -657,7 +657,6 @@ struct FolderImageThumbnail: View {
             }
 
             // Create thumbnail off main thread
-            let targetSize = NSSize(width: 150, height: 150)
 
             // Use CGImage for better performance
             var proposedRect = NSRect(origin: .zero, size: image.size)

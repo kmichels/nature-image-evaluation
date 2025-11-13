@@ -15,6 +15,19 @@ struct ImageDetailView: View {
     @State private var displayedImage: NSImage?
     @State private var selectedTab: DetailTab = .evaluation
     @State private var hasLoadedImage = false
+    @State private var showSaliency = false
+    @State private var saliencyType: SaliencyType = .attention
+    @State private var saliencyOverlay: NSImage?
+    @State private var attentionMap: NSImage?
+    @State private var objectnessMap: NSImage?
+    @State private var combinedMap: NSImage?
+    @State private var isGeneratingSaliency = false
+
+    enum SaliencyType: String, CaseIterable {
+        case attention = "Attention"
+        case objectness = "Objects"
+        case combined = "Combined"
+    }
 
     init(evaluation: ImageEvaluation) {
         self.evaluation = evaluation
@@ -32,26 +45,78 @@ struct ImageDetailView: View {
         case metadata = "SEO Metadata"
     }
 
+    private var currentSaliencyOverlay: NSImage? {
+        switch saliencyType {
+        case .attention:
+            return attentionMap
+        case .objectness:
+            return objectnessMap
+        case .combined:
+            return combinedMap
+        }
+    }
+
     var body: some View {
         let _ = print("🟡 ImageDetailView.body called, displayedImage: \(displayedImage != nil), hasLoadedImage: \(hasLoadedImage)")
         return HSplitView {
             // Left side - Image
             VStack {
-                if let image = displayedImage {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ProgressView("Loading image...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .task {
-                            print("🟠 ProgressView.task triggered, hasLoadedImage: \(hasLoadedImage)")
-                            if !hasLoadedImage {
-                                loadImage()
+                // Image display with optional saliency overlay
+                ZStack {
+                    if let image = displayedImage {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                        // Saliency overlay
+                        if showSaliency, let overlay = currentSaliencyOverlay {
+                            Image(nsImage: overlay)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .blendMode(.normal)
+                        }
+                    } else {
+                        ProgressView("Loading image...")
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .task {
+                                print("🟠 ProgressView.task triggered, hasLoadedImage: \(hasLoadedImage)")
+                                if !hasLoadedImage {
+                                    loadImage()
+                                }
+                            }
+                    }
+                }
+
+                // Saliency controls
+                HStack(spacing: 12) {
+                    Toggle(isOn: $showSaliency) {
+                        Label("Saliency Map", systemImage: "eye.fill")
+                    }
+                    .toggleStyle(.button)
+                    .disabled(displayedImage == nil || isGeneratingSaliency)
+
+                    if showSaliency {
+                        Picker("Type", selection: $saliencyType) {
+                            ForEach(SaliencyType.allCases, id: \.self) { type in
+                                Text(type.rawValue).tag(type)
                             }
                         }
+                        .pickerStyle(.segmented)
+                        .frame(width: 250)
+                        .disabled(isGeneratingSaliency)
+                    }
+
+                    if isGeneratingSaliency {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+
+                    Spacer()
                 }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
 
                 // Image metadata
                 HStack(spacing: 20) {
@@ -575,6 +640,20 @@ struct ImageDetailView: View {
                 loadImage()
             }
         }
+        .onChange(of: showSaliency) { _, newValue in
+            if newValue && attentionMap == nil {
+                Task {
+                    await generateSaliencyMaps()
+                }
+            }
+        }
+        .onChange(of: displayedImage) { _, newImage in
+            if newImage != nil && showSaliency && attentionMap == nil {
+                Task {
+                    await generateSaliencyMaps()
+                }
+            }
+        }
     }
 
     // MARK: - Helper Methods
@@ -624,6 +703,29 @@ struct ImageDetailView: View {
         }
 
         print("⚪ loadImage() completed, displayedImage: \(displayedImage != nil)")
+    }
+
+    private func generateSaliencyMaps() async {
+        guard let image = displayedImage else { return }
+
+        await MainActor.run {
+            isGeneratingSaliency = true
+        }
+
+        let analyzer = SaliencyAnalyzer.shared
+
+        // Generate all maps
+        let maps = await analyzer.generateDualSaliencyMaps(for: image)
+
+        // Also generate combined map
+        let combinedOverlay = await analyzer.generateCombinedSaliencyOverlay(for: image)
+
+        await MainActor.run {
+            self.attentionMap = maps.attention
+            self.objectnessMap = maps.objectness
+            self.combinedMap = combinedOverlay
+            self.isGeneratingSaliency = false
+        }
     }
 
     private func getImageName() -> String {
