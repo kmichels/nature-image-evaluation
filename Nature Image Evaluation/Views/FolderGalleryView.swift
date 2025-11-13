@@ -369,8 +369,7 @@ struct FolderGalleryView: View {
 
         // Find if this image has already been evaluated
         let filename = url.lastPathComponent
-        print("🔍 Looking up evaluation for: \(filename)")
-        let result = existingEvaluations.first { evaluation in
+        return existingEvaluations.first { evaluation in
             if let bookmarkData = evaluation.originalFilePath,
                let data = Data(base64Encoded: bookmarkData) {
                 var isStale = false
@@ -381,8 +380,6 @@ struct FolderGalleryView: View {
             }
             return false
         }
-        print("   → Found: \(result != nil)")
-        return result
     }
 
     private func startEvaluation() {
@@ -455,8 +452,8 @@ struct FolderGalleryView: View {
                 }
 
                 await MainActor.run {
-                    // Clear selection after evaluation
-                    selectedImages.removeAll()
+                    // Don't clear selection - let user see what was evaluated
+                    // selectedImages.removeAll() -- removed to keep selection visible
                     showingEvaluationSheet = false
                     // Trigger view refresh
                     evaluationCompletedCount += 1
@@ -626,9 +623,6 @@ struct FolderImageThumbnail: View {
     }
 
     private func loadThumbnail() async {
-        let startTime = Date()
-        print("🔵 Starting thumbnail load for: \(url.lastPathComponent)")
-
         await MainActor.run {
             isLoadingThumbnail = true
         }
@@ -637,11 +631,8 @@ struct FolderImageThumbnail: View {
         let thumbnailImage = await Task.detached(priority: .userInitiated) { () -> NSImage? in
             // Load image - parent folder already has security scope
             guard let image = NSImage(contentsOf: url) else {
-                print("❌ Failed to load image for thumbnail: \(url.lastPathComponent)")
                 return nil
             }
-
-            print("📊 Loaded image: \(url.lastPathComponent) - Size: \(image.size)")
 
             // Create thumbnail off main thread
             let targetSize = NSSize(width: 150, height: 150)
@@ -689,9 +680,6 @@ struct FolderImageThumbnail: View {
 
             return NSImage(cgImage: thumbnailCGImage, size: NSSize(width: targetWidth, height: targetHeight))
         }.value
-
-        let loadTime = Date().timeIntervalSince(startTime)
-        print("⏱️ Thumbnail load time for \(url.lastPathComponent): \(String(format: "%.3f", loadTime))s")
 
         await MainActor.run {
             isLoadingThumbnail = false
