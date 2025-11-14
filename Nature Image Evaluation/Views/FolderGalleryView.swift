@@ -29,6 +29,7 @@ struct FolderGalleryView: View {
     @State private var cachedFilteredImages: [URL] = []  // Cache sorted/filtered results
     @State private var thumbnailCache: [URL: NSImage] = [:]  // Cache thumbnails
     @State private var showOnlySelected = false  // Toggle to show only selected images
+    @State private var hasLoadedInitialImages = false  // Track if we've loaded images for this folder
 
     // Grid layout
     private let columns = [
@@ -180,7 +181,9 @@ struct FolderGalleryView: View {
 
                 Button("Refresh") {
                     Task {
+                        hasLoadedInitialImages = false
                         await loadFolderImages()
+                        hasLoadedInitialImages = true
                     }
                 }
             }
@@ -260,7 +263,21 @@ struct FolderGalleryView: View {
             }
         }
         .task {
-            await loadFolderImages()
+            // Only load images if we haven't loaded them yet for this folder
+            if !hasLoadedInitialImages {
+                await loadFolderImages()
+                hasLoadedInitialImages = true
+            }
+        }
+        .onChange(of: folder) { _, _ in
+            // Reset and reload when folder changes
+            hasLoadedInitialImages = false
+            folderImages = []
+            thumbnailCache = [:]
+            Task {
+                await loadFolderImages()
+                hasLoadedInitialImages = true
+            }
         }
         .onChange(of: sortOption) { _, _ in
             updateFilteredImages()

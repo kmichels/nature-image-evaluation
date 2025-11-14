@@ -249,8 +249,15 @@ struct SmartFolderGalleryView: View {
         isRefreshing = true
 
         Task {
+            let fetchedImages = smartFolderManager.fetchImages(for: smartFolder)
             await MainActor.run {
-                images = smartFolderManager.fetchImages(for: smartFolder)
+                images = fetchedImages
+            }
+
+            // Generate missing thumbnails in the background
+            await ThumbnailGenerator.shared.generateMissingThumbnails(for: fetchedImages, context: viewContext)
+
+            await MainActor.run {
                 isRefreshing = false
             }
         }
@@ -295,13 +302,16 @@ private struct SmartFolderImageThumbnailView: View {
     let onTap: () -> Void
     let onDoubleTap: () -> Void
 
+    @State private var thumbnailImage: NSImage?
+    @State private var isLoadingThumbnail = false
+    @Environment(\.managedObjectContext) private var viewContext
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 0) {
                 // Thumbnail
-                if let thumbnailData = image.thumbnailData,
-                   let nsImage = NSImage(data: thumbnailData) {
-                    Image(nsImage: nsImage)
+                if let thumbnailImage = thumbnailImage {
+                    Image(nsImage: thumbnailImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 150, height: 150)
@@ -312,9 +322,16 @@ private struct SmartFolderImageThumbnailView: View {
                         .fill(Color.gray.opacity(0.2))
                         .frame(width: 150, height: 150)
                         .overlay(
-                            Image(systemName: "photo")
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary)
+                            Group {
+                                if isLoadingThumbnail {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "photo")
+                                        .font(.largeTitle)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         )
                 }
 
@@ -373,6 +390,25 @@ private struct SmartFolderImageThumbnailView: View {
                     .offset(x: -8, y: 8)
             }
         }
+        .task {
+            await loadThumbnail()
+        }
+    }
+
+    private func loadThumbnail() async {
+        // First check if we have cached thumbnail data
+        if let thumbnailData = image.thumbnailData,
+           let nsImage = NSImage(data: thumbnailData) {
+            thumbnailImage = nsImage
+            return
+        }
+
+        // Otherwise, generate thumbnail
+        isLoadingThumbnail = true
+        if let thumbnailData = await ThumbnailGenerator.shared.ensureThumbnail(for: image, context: viewContext) {
+            thumbnailImage = NSImage(data: thumbnailData)
+        }
+        isLoadingThumbnail = false
     }
 
     private func placementColor(_ placement: String) -> Color {
