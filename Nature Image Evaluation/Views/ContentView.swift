@@ -20,11 +20,14 @@ struct ContentView: View {
     @State private var showingSettings = false
     @State private var selectedSidebarItem: SidebarItem?
     @State private var folderManager = FolderManager.shared
+    @StateObject private var smartFolderManager = SmartFolderManager.shared
     @State private var showingFolderPicker = false
+    @State private var showingSmartFolderCreator = false
 
     enum SidebarItem: Hashable {
         case quickAnalysis
         case folder(MonitoredFolder)
+        case smartFolder(Collection)
         case settings
 
         // Helper for saving/loading selection
@@ -34,6 +37,8 @@ struct ContentView: View {
                 return "quickAnalysis"
             case .folder(let folder):
                 return "folder:\(folder.id.uuidString)"
+            case .smartFolder(let smartFolder):
+                return "smartFolder:\(smartFolder.id?.uuidString ?? "")"
             case .settings:
                 return "settings"
             }
@@ -48,6 +53,32 @@ struct ContentView: View {
                     NavigationLink(value: SidebarItem.quickAnalysis) {
                         Label("Quick Analysis", systemImage: "sparkles")
                     }
+                }
+
+                // Smart Folders Section
+                Section("Smart Folders") {
+                    ForEach(smartFolderManager.smartFolders, id: \.self) { smartFolder in
+                        NavigationLink(value: SidebarItem.smartFolder(smartFolder)) {
+                            Label(smartFolder.name ?? "Untitled", systemImage: smartFolder.icon ?? "sparkle.magnifyingglass")
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                // If we're removing the currently selected smart folder, clear selection
+                                if case .smartFolder(let selectedFolder) = selectedSidebarItem,
+                                   selectedFolder.id == smartFolder.id {
+                                    selectedSidebarItem = .quickAnalysis
+                                }
+                                try? smartFolderManager.deleteSmartFolder(smartFolder)
+                            } label: {
+                                Label("Remove Smart Folder", systemImage: "trash")
+                            }
+                        }
+                    }
+
+                    Button(action: { showingSmartFolderCreator = true }) {
+                        Label("Add Smart Folder...", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 // Folders Section
@@ -98,6 +129,11 @@ struct ContentView: View {
                         .environment(\.managedObjectContext, viewContext)
                         .navigationTitle(folder.name)
 
+                case .smartFolder(let smartFolder):
+                    SmartFolderGalleryView(smartFolder: smartFolder)
+                        .environment(\.managedObjectContext, viewContext)
+                        .navigationTitle(smartFolder.name ?? "Smart Folder")
+
                 case .settings:
                     SettingsView()
                         .environment(\.managedObjectContext, viewContext)
@@ -136,8 +172,13 @@ struct ContentView: View {
                 print("Error selecting folder: \(error)")
             }
         }
+        .sheet(isPresented: $showingSmartFolderCreator) {
+            SmartFolderEditorView()
+        }
         .onAppear {
             loadSelectedSidebarItem()
+            // Create default smart folders if none exist
+            try? smartFolderManager.createDefaultSmartFolders()
         }
         .onChange(of: selectedSidebarItem) { oldValue, newValue in
             saveSelectedSidebarItem()
@@ -174,6 +215,16 @@ struct ContentView: View {
                 selectedSidebarItem = .folder(folder)
             } else {
                 // Folder no longer exists, default to Quick Analysis
+                selectedSidebarItem = .quickAnalysis
+            }
+        } else if savedKey.hasPrefix("smartFolder:") {
+            // Extract the smart folder ID
+            let smartFolderIDString = String(savedKey.dropFirst(12))
+            if let smartFolderID = UUID(uuidString: smartFolderIDString),
+               let smartFolder = smartFolderManager.smartFolders.first(where: { $0.id == smartFolderID }) {
+                selectedSidebarItem = .smartFolder(smartFolder)
+            } else {
+                // Smart folder no longer exists, default to Quick Analysis
                 selectedSidebarItem = .quickAnalysis
             }
         } else {
