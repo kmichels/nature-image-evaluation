@@ -254,8 +254,12 @@ struct SmartFolderGalleryView: View {
                 images = fetchedImages
             }
 
-            // Generate missing thumbnails in the background
-            await ThumbnailGenerator.shared.generateMissingThumbnails(for: fetchedImages, context: viewContext)
+            // Generate missing thumbnails in the background only if needed
+            let needsThumbnails = fetchedImages.filter { $0.thumbnailData == nil }
+            if !needsThumbnails.isEmpty {
+                print("Generating thumbnails for \(needsThumbnails.count) images in smart folder")
+                await ThumbnailGenerator.shared.generateMissingThumbnails(for: fetchedImages, context: viewContext)
+            }
 
             await MainActor.run {
                 isRefreshing = false
@@ -399,16 +403,35 @@ private struct SmartFolderImageThumbnailView: View {
         // First check if we have cached thumbnail data
         if let thumbnailData = image.thumbnailData,
            let nsImage = NSImage(data: thumbnailData) {
-            thumbnailImage = nsImage
+            await MainActor.run {
+                thumbnailImage = nsImage
+            }
             return
         }
 
-        // Otherwise, generate thumbnail
-        isLoadingThumbnail = true
-        if let thumbnailData = await ThumbnailGenerator.shared.ensureThumbnail(for: image, context: viewContext) {
-            thumbnailImage = NSImage(data: thumbnailData)
+        // Don't generate individual thumbnails here - let the batch process handle it
+        // This prevents multiple simultaneous attempts to generate the same thumbnail
+        await MainActor.run {
+            isLoadingThumbnail = true
         }
-        isLoadingThumbnail = false
+
+        // Wait a bit for batch generation to complete
+        for _ in 0..<10 { // Check up to 10 times
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+
+            if let thumbnailData = image.thumbnailData,
+               let nsImage = NSImage(data: thumbnailData) {
+                await MainActor.run {
+                    thumbnailImage = nsImage
+                    isLoadingThumbnail = false
+                }
+                return
+            }
+        }
+
+        await MainActor.run {
+            isLoadingThumbnail = false
+        }
     }
 
     private func placementColor(_ placement: String) -> Color {
