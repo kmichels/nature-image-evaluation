@@ -16,16 +16,23 @@ final class AnthropicAPIService: APIProviderProtocol {
     private let decoder = JSONDecoder()
 
     init() {
-        // Create a custom URLSession configuration to help with DNS resolution in sandboxed apps
+        // Create a custom URLSession configuration with proper timeout handling
         let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 60
-        configuration.timeoutIntervalForResource = 120
+
+        // Timeout Configuration
+        configuration.timeoutIntervalForRequest = Constants.networkRequestTimeout
+        configuration.timeoutIntervalForResource = Constants.networkResourceTimeout
+
+        // Connection settings
         configuration.waitsForConnectivity = true
         configuration.allowsCellularAccess = true
         configuration.allowsExpensiveNetworkAccess = true
         configuration.allowsConstrainedNetworkAccess = true
 
-        // Try to help with DNS resolution
+        // Network service type for better performance
+        configuration.networkServiceType = .responsiveData
+
+        // DNS and cache settings
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
 
@@ -120,6 +127,9 @@ final class AnthropicAPIService: APIProviderProtocol {
         // Parse the evaluation JSON
         let evaluationData = try parseEvaluationJSON(from: content)
 
+        // Validate scores are within expected range (0-10)
+        try validateScores(evaluationData)
+
         return EvaluationResponse(
             compositionScore: evaluationData.compositionScore,
             qualityScore: evaluationData.qualityScore,
@@ -179,7 +189,7 @@ final class AnthropicAPIService: APIProviderProtocol {
     private func performRequestWithRetry(
         request: URLRequest,
         apiKey: String,
-        maxRetries: Int = 3
+        maxRetries: Int = Constants.maxNetworkRetries
     ) async throws -> EvaluationResponse {
         var currentRetry = 0
 
@@ -226,19 +236,43 @@ final class AnthropicAPIService: APIProviderProtocol {
             } catch let error as APIError {
                 throw error
             } catch {
-                // Check for DNS resolution error
+                // Check for timeout error
                 if let nsError = error as NSError?,
-                   nsError.domain == NSURLErrorDomain,
-                   nsError.code == NSURLErrorCannotFindHost {
-                    print("DNS resolution failed. This may be a macOS sandbox issue.")
-                    print("Error details: \(sanitizeError(nsError))")
-                    throw APIError.networkError(NSError(
-                        domain: NSURLErrorDomain,
-                        code: NSURLErrorCannotFindHost,
-                        userInfo: [
-                            NSLocalizedDescriptionKey: "Cannot resolve api.anthropic.com. This may be a macOS sandbox DNS issue. Try restarting the app or check your network settings."
-                        ]
-                    ))
+                   nsError.domain == NSURLErrorDomain {
+                    switch nsError.code {
+                    case NSURLErrorTimedOut:
+                        print("Request timed out after \(Constants.networkRequestTimeout) seconds")
+                        throw APIError.networkError(NSError(
+                            domain: NSURLErrorDomain,
+                            code: NSURLErrorTimedOut,
+                            userInfo: [
+                                NSLocalizedDescriptionKey: "Request timed out. The server took too long to respond. Please try again or check your internet connection."
+                            ]
+                        ))
+
+                    case NSURLErrorCannotFindHost:
+                        print("DNS resolution failed. This may be a macOS sandbox issue.")
+                        print("Error details: \(sanitizeError(nsError))")
+                        throw APIError.networkError(NSError(
+                            domain: NSURLErrorDomain,
+                            code: NSURLErrorCannotFindHost,
+                            userInfo: [
+                                NSLocalizedDescriptionKey: "Cannot resolve api.anthropic.com. This may be a macOS sandbox DNS issue. Try restarting the app or check your network settings."
+                            ]
+                        ))
+
+                    case NSURLErrorNotConnectedToInternet:
+                        throw APIError.networkError(NSError(
+                            domain: NSURLErrorDomain,
+                            code: NSURLErrorNotConnectedToInternet,
+                            userInfo: [
+                                NSLocalizedDescriptionKey: "No internet connection. Please check your network settings and try again."
+                            ]
+                        ))
+
+                    default:
+                        break
+                    }
                 }
 
                 if currentRetry < maxRetries - 1 {
@@ -256,10 +290,48 @@ final class AnthropicAPIService: APIProviderProtocol {
         throw APIError.providerSpecificError("Max retries exceeded")
     }
 
+    private func validateScores(_ data: EvaluationData) throws {
+        // Validate all scores are within 0-10 range
+        let scores = [
+            ("Composition", data.compositionScore),
+            ("Quality", data.qualityScore),
+            ("Sellability", data.sellabilityScore),
+            ("Artistic", data.artisticScore),
+            ("Overall", data.overallWeightedScore)
+        ]
+
+        for (name, score) in scores {
+            if score < 0 || score > 10 {
+                throw APIError.parsingFailed("\(name) score \(score) is outside valid range (0-10)")
+            }
+        }
+
+        // Validate required fields are not empty
+        if data.strengths.isEmpty {
+            throw APIError.parsingFailed("Strengths array cannot be empty")
+        }
+
+        if data.improvements.isEmpty {
+            throw APIError.parsingFailed("Improvements array cannot be empty")
+        }
+
+        // Validate placement value
+        let validPlacements = ["PORTFOLIO", "STORE", "BOTH", "ARCHIVE", "PRACTICE"]
+        if !validPlacements.contains(data.primaryPlacement) {
+            throw APIError.parsingFailed("Invalid placement value: \(data.primaryPlacement)")
+        }
+    }
+
     private func parseEvaluationJSON(from content: String) throws -> EvaluationData {
+        // Check maximum content length to prevent memory issues
+        let maxContentLength = 100_000 // 100KB should be more than enough
+        if content.count > maxContentLength {
+            throw APIError.parsingFailed("Response content exceeds maximum allowed length")
+        }
+
         // Find JSON content in the response (might be wrapped in markdown)
-        // Updated pattern to handle nested objects properly
-        let jsonPattern = #"\{[\s\S]*\}"#
+        // Use non-greedy pattern to get first complete JSON object
+        let jsonPattern = #"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}"#
         guard let range = content.range(of: jsonPattern, options: .regularExpression),
               let jsonData = String(content[range]).data(using: .utf8) else {
             throw APIError.parsingFailed("Could not extract JSON from response")

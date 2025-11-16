@@ -101,24 +101,71 @@ enum APIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "Invalid API URL"
+            return "The API service URL is not configured correctly. Please contact support if this issue persists."
+
         case .invalidAPIKey:
-            return "Invalid or missing API key"
+            return "Your API key appears to be missing or invalid. Please check your API key in Settings and ensure you've copied it correctly."
+
         case .rateLimitExceeded(let retryAfter):
             if let retryAfter = retryAfter {
-                return "Rate limit exceeded. Retry after \(Int(retryAfter)) seconds"
+                let minutes = Int(retryAfter) / 60
+                if minutes > 0 {
+                    return "You've reached the API rate limit. Please wait \(minutes) minute\(minutes == 1 ? "" : "s") before continuing, or reduce the batch size in Settings."
+                } else {
+                    return "API rate limit reached. Waiting \(Int(retryAfter)) seconds before retrying..."
+                }
             }
-            return "Rate limit exceeded. Please wait before retrying"
+            return "You've reached the API rate limit. Please wait a moment before continuing, or try reducing the batch size in Settings."
+
         case .authenticationFailed:
-            return "Authentication failed. Please check your API key"
+            return "Authentication failed. Your API key may be invalid or expired. Please verify your API key in Settings and ensure your account is active."
+
         case .invalidResponse:
-            return "Invalid response from API"
+            return "Received an unexpected response from the API service. This might be a temporary issue. Please try again in a moment."
+
         case .parsingFailed(let message):
-            return "Failed to parse response: \(message)"
+            // Make technical parsing errors more user-friendly
+            if message.contains("score") && message.contains("outside valid range") {
+                return "The AI service returned invalid score values. Please try evaluating this image again."
+            } else if message.contains("empty") {
+                return "The AI service didn't provide complete evaluation data. Please try again."
+            } else {
+                return "Could not process the evaluation results. Please try again or contact support if the issue persists."
+            }
+
         case .networkError(let error):
-            return "Network error: \(error.localizedDescription)"
+            // Already handled with specific messages in AnthropicAPIService
+            return error.localizedDescription
+
         case .providerSpecificError(let message):
-            return message
+            // Make provider errors more user-friendly
+            if message.lowercased().contains("overloaded") {
+                return "The AI service is currently experiencing high demand. Your request will be retried automatically."
+            } else if message.lowercased().contains("timeout") {
+                return "The request took too long to complete. Please check your internet connection and try again."
+            } else {
+                return message
+            }
+        }
+    }
+
+    /// User-friendly recovery suggestion for each error type
+    var recoverySuggestion: String? {
+        switch self {
+        case .invalidAPIKey, .authenticationFailed:
+            return "Go to Settings > API Configuration to update your API key."
+
+        case .rateLimitExceeded:
+            return "Consider reducing the batch size or adding delays between requests in Settings > Rate Limiting."
+
+        case .networkError:
+            return "Check your internet connection and try again. If using a VPN, try disabling it temporarily."
+
+        case .providerSpecificError(let message) where message.lowercased().contains("overloaded"):
+            return "The system will automatically retry. You can also try again during off-peak hours."
+
+        default:
+            return "If this problem continues, please try restarting the app or contact support."
         }
     }
 }

@@ -630,6 +630,16 @@ struct ImageDetailView: View {
             print("🔴 onAppear triggered")
             loadImage()
         }
+        .onDisappear {
+            print("🔴 onDisappear - cleaning up resources")
+            // Clean up resources to prevent memory leaks
+            displayedImage = nil
+            attentionMap = nil
+            objectnessMap = nil
+            combinedMap = nil
+            saliencyOverlay = nil
+            hasLoadedImage = false
+        }
         .task {
             print("🟣 Main view .task triggered")
             // Backup loading mechanism in case onAppear doesn't trigger
@@ -676,8 +686,7 @@ struct ImageDetailView: View {
 
         // Fallback to loading from bookmark
         if displayedImage == nil,
-           let bookmarkString = evaluation.originalFilePath,
-           let bookmarkData = Data(base64Encoded: bookmarkString) {
+           let bookmarkData = evaluation.originalFilePath {
             print("⚪ Trying bookmark...")
             do {
                 var isStale = false
@@ -729,8 +738,7 @@ struct ImageDetailView: View {
     }
 
     private func getImageName() -> String {
-        if let bookmarkString = evaluation.originalFilePath,
-           let bookmarkData = Data(base64Encoded: bookmarkString) {
+        if let bookmarkData = evaluation.originalFilePath {
             do {
                 var isStale = false
                 let url = try URL(resolvingBookmarkData: bookmarkData, bookmarkDataIsStale: &isStale)

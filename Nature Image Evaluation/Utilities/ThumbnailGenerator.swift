@@ -31,9 +31,8 @@ class ThumbnailGenerator {
             }
         }
 
-        // Try to generate from original file path (stored as base64 bookmark)
-        if let originalPath = evaluation.originalFilePath,
-           let bookmarkData = Data(base64Encoded: originalPath) {
+        // Try to generate from original file path (stored as bookmark data)
+        if let bookmarkData = evaluation.originalFilePath {
             do {
                 var isStale = false
                 let url = try URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale)
@@ -52,25 +51,61 @@ class ThumbnailGenerator {
 
     /// Generate thumbnail from file URL and save to Core Data
     private func generateAndSaveThumbnail(from url: URL, for evaluation: ImageEvaluation, context: NSManagedObjectContext) async -> Data? {
-        // Load image data directly to handle security-scoped URLs properly
-        guard let imageData = try? Data(contentsOf: url),
-              let image = NSImage(data: imageData) else {
-            print("Failed to load image from URL: \(url.path)")
-            return nil
-        }
+        // Use detached task for background processing
+        return await Task.detached(priority: .background) {
+            // Use FileHandle for more controlled file access
+            do {
+                // Open file handle with proper error handling
+                let fileHandle = try FileHandle(forReadingFrom: url)
+                defer {
+                    // Always close the file handle
+                    try? fileHandle.close()
+                }
 
-        guard let thumbnail = imageProcessor.generateThumbnail(image: image) else {
-            print("Failed to generate thumbnail for: \(url.path)")
-            return nil
-        }
+                // Read data with size limit to prevent memory issues
+                let maxSize: UInt64 = 100_000_000 // 100MB limit
+                let fileSize = try fileHandle.seekToEnd()
+                guard fileSize <= maxSize else {
+                    print("Image file too large for thumbnail generation: \(fileSize) bytes")
+                    return nil
+                }
 
-        let thumbnailData = imageProcessor.thumbnailToData(thumbnail)
+                try fileHandle.seek(toOffset: 0)
+                let imageData = autoreleasepool {
+                    fileHandle.readDataToEndOfFile()
+                }
 
-        // Save to Core Data
-        evaluation.thumbnailData = thumbnailData
-        try? context.save()
+                let thumbnailData = autoreleasepool {
+                    guard let image = NSImage(data: imageData) else {
+                        print("Failed to create image from data: \(url.path)")
+                        return nil as Data?
+                    }
 
-        return thumbnailData
+                    // Clear image data reference immediately after creating NSImage
+                    guard let thumbnail = self.imageProcessor.generateThumbnail(image: image) else {
+                        print("Failed to generate thumbnail for: \(url.path)")
+                        return nil as Data?
+                    }
+
+                    return self.imageProcessor.thumbnailToData(thumbnail)
+                }
+
+                guard let thumbnailData = thumbnailData else {
+                    return nil
+                }
+
+                // Save to Core Data on the correct context
+                await context.perform {
+                    evaluation.thumbnailData = thumbnailData
+                    try? context.save()
+                }
+
+                return thumbnailData
+            } catch {
+                print("Error generating thumbnail: \(error)")
+                return nil
+            }
+        }.value
     }
 
     /// Batch generate thumbnails for multiple evaluations

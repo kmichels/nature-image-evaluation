@@ -160,8 +160,8 @@ final class EvaluationManager {
                 let imageEval = ImageEvaluation(context: viewContext)
                 imageEval.id = UUID()
                 imageEval.dateAdded = Date()
-                // Store the bookmark data directly, not as base64
-                imageEval.originalFilePath = bookmarkData.base64EncodedString()
+                // Store the bookmark data directly as Data
+                imageEval.originalFilePath = bookmarkData
 
                 // Get original dimensions
                 if let rep = image.representations.first {
@@ -301,9 +301,13 @@ final class EvaluationManager {
                             do {
                                 try await evaluateImage(imageEval, prompt: prompt, apiKey: apiKey)
                                 successfulEvaluations += 1
-                                failedEvaluations -= 1 // Correct the count
+                                failedEvaluations -= 1 // Correct the count since retry succeeded
                             } catch {
                                 print("Retry failed: \(error)")
+                                currentError = error
+                                // Don't change failedEvaluations - it was already incremented for this image
+                                // Create failed evaluation record for tracking
+                                createFailedEvaluation(for: imageEval, error: error)
                             }
                         }
                         // Check if it's an overloaded error
@@ -313,9 +317,9 @@ final class EvaluationManager {
                             let waitTime: TimeInterval = 60.0 // Wait 60 seconds
                             statusMessage = "API service overloaded. Waiting \(Int(waitTime)) seconds..."
 
-                            // Retry up to 3 times with exponential backoff
+                            // Retry with exponential backoff up to the configured limit
                             var retryCount = 0
-                            let maxRetries = 3
+                            let maxRetries = Constants.maxNetworkRetries
 
                             while retryCount < maxRetries {
                                 let backoffTime = waitTime * pow(2.0, Double(retryCount))

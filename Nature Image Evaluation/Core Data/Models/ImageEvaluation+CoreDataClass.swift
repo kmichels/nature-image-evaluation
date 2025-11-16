@@ -41,7 +41,7 @@ extension ImageEvaluation {
     // Basic Properties
     @NSManaged public var id: UUID?
     @NSManaged public var dateAdded: Date?
-    @NSManaged public var originalFilePath: String?
+    @NSManaged public var originalFilePath: Data?
     @NSManaged public var processedFilePath: String?
     @NSManaged public var thumbnailData: Data?
     @NSManaged public var originalWidth: Int32

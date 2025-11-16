@@ -486,6 +486,17 @@ struct SettingsView: View {
     }
 
     private func saveAPIKey() {
+        // Validate API key format first
+        let validationResult = validateAPIKeyFormat(currentAPIKey, provider: selectedProvider)
+        guard validationResult.isValid else {
+            testResult = TestResult(
+                success: false,
+                message: "Invalid API key format",
+                details: validationResult.message
+            )
+            return
+        }
+
         do {
             try keychainManager.saveAPIKey(currentAPIKey, for: selectedProvider)
 
@@ -707,6 +718,56 @@ struct SettingsView: View {
                 details: error.localizedDescription
             )
         }
+    }
+
+    // MARK: - API Key Validation
+
+    private func validateAPIKeyFormat(_ key: String, provider: Constants.APIProvider) -> (isValid: Bool, message: String) {
+        // Check if key is empty
+        guard !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return (false, "API key cannot be empty")
+        }
+
+        // Check minimum length
+        guard key.count >= 20 else {
+            return (false, "API key appears too short. Please check you've copied the complete key.")
+        }
+
+        // Provider-specific validation
+        switch provider {
+        case .anthropic:
+            // Anthropic keys typically start with "sk-ant-"
+            if !key.starts(with: "sk-ant-") {
+                return (false, "Anthropic API keys should start with 'sk-ant-'. Please verify you've copied the correct key.")
+            }
+            // Check for valid characters (alphanumeric, hyphens, underscores)
+            let validCharSet = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+            if key.rangeOfCharacter(from: validCharSet.inverted) != nil {
+                return (false, "API key contains invalid characters. It should only contain letters, numbers, hyphens, and underscores.")
+            }
+
+        case .openai:
+            // OpenAI keys typically start with "sk-"
+            if !key.starts(with: "sk-") {
+                return (false, "OpenAI API keys should start with 'sk-'. Please verify you've copied the correct key.")
+            }
+            // Check for valid characters
+            let validCharSet = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+            if key.rangeOfCharacter(from: validCharSet.inverted) != nil {
+                return (false, "API key contains invalid characters. It should only contain letters, numbers, hyphens, and underscores.")
+            }
+        }
+
+        // Check for common mistakes
+        if key.contains(" ") {
+            return (false, "API key contains spaces. Please remove any accidental spaces.")
+        }
+
+        if key.contains("\n") || key.contains("\t") {
+            return (false, "API key contains line breaks or tabs. Please ensure it's on a single line.")
+        }
+
+        return (true, "API key format appears valid")
     }
 }
 

@@ -457,10 +457,9 @@ struct FolderGalleryView: View {
         // Find if this image has already been evaluated
         let filename = url.lastPathComponent
         return existingEvaluations.first { evaluation in
-            if let bookmarkData = evaluation.originalFilePath,
-               let data = Data(base64Encoded: bookmarkData) {
+            if let bookmarkData = evaluation.originalFilePath {
                 var isStale = false
-                if let evaluationURL = try? URL(resolvingBookmarkData: data, bookmarkDataIsStale: &isStale),
+                if let evaluationURL = try? URL(resolvingBookmarkData: bookmarkData, bookmarkDataIsStale: &isStale),
                    evaluationURL.lastPathComponent == filename {
                     return true
                 }
@@ -502,7 +501,7 @@ struct FolderGalleryView: View {
                         includingResourceValuesForKeys: nil,
                         relativeTo: nil
                     ) {
-                        newEvaluation.originalFilePath = bookmarkData.base64EncodedString()
+                        newEvaluation.originalFilePath = bookmarkData
                     }
 
                     // Process the image

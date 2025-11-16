@@ -27,6 +27,17 @@ struct Constants {
     static let openAIAPIURL = "https://api.openai.com/v1/chat/completions"
     static let openAIDefaultModel = "gpt-4-vision-preview"
 
+    // MARK: - Network Configuration
+
+    /// Timeout for individual network requests (seconds)
+    static let networkRequestTimeout: TimeInterval = 60.0
+
+    /// Timeout for entire resource download (seconds)
+    static let networkResourceTimeout: TimeInterval = 120.0
+
+    /// Maximum retries for network failures
+    static let maxNetworkRetries: Int = 3
+
     // MARK: - Rate Limiting
 
     /// Default delay between API requests (seconds)

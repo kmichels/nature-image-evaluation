@@ -21,7 +21,7 @@ struct PersistenceController {
             let imageEval = ImageEvaluation(context: viewContext)
             imageEval.id = UUID()
             imageEval.dateAdded = Date().addingTimeInterval(TimeInterval(-i * 86400))
-            imageEval.originalFilePath = "bookmark_data_\(i)"
+            imageEval.originalFilePath = "bookmark_data_\(i)".data(using: .utf8)
             imageEval.processedFilePath = "/path/to/processed/image_\(i).jpg"
             imageEval.originalWidth = 4000
             imageEval.originalHeight = 3000

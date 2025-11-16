@@ -25,7 +25,7 @@ class CoreDataModel {
 
         imageAttributes.append(createAttribute(name: "id", type: .UUIDAttributeType, optional: true))
         imageAttributes.append(createAttribute(name: "dateAdded", type: .dateAttributeType, optional: true))
-        imageAttributes.append(createAttribute(name: "originalFilePath", type: .stringAttributeType, optional: true))
+        imageAttributes.append(createAttribute(name: "originalFilePath", type: .binaryDataAttributeType, optional: true))
         imageAttributes.append(createAttribute(name: "processedFilePath", type: .stringAttributeType, optional: true))
         imageAttributes.append(createAttribute(name: "thumbnailData", type: .binaryDataAttributeType, optional: true, allowsExternalStorage: true))
         imageAttributes.append(createAttribute(name: "originalWidth", type: .integer32AttributeType, optional: true, defaultValue: 0))
@@ -54,6 +54,18 @@ class CoreDataModel {
         imageAttributes.append(createAttribute(name: "userTags", type: .transformableAttributeType, optional: true, transformerName: "NSSecureUnarchiveFromDataTransformer"))
 
         imageEntity.properties = imageAttributes
+
+        // Add indexes for commonly queried fields
+        let imageIndexes = NSFetchIndexDescription(name: "byDateAdded", elements: [
+            NSFetchIndexElementDescription(property: imageAttributes.first { $0.name == "dateAdded" }!, collationType: .binary)
+        ])
+        let evaluationDateIndex = NSFetchIndexDescription(name: "byEvaluationDate", elements: [
+            NSFetchIndexElementDescription(property: imageAttributes.first { $0.name == "dateLastEvaluated" }!, collationType: .binary)
+        ])
+        let favoriteIndex = NSFetchIndexDescription(name: "byFavorite", elements: [
+            NSFetchIndexElementDescription(property: imageAttributes.first { $0.name == "isFavorite" }!, collationType: .binary)
+        ])
+        imageEntity.indexes = [imageIndexes, evaluationDateIndex, favoriteIndex]
 
         // MARK: - EvaluationResult Entity
 
@@ -145,6 +157,18 @@ class CoreDataModel {
         evalAttributes.append(createAttribute(name: "saliencyCenterOfMass", type: .transformableAttributeType, optional: true, transformerName: "NSSecureUnarchiveFromDataTransformer"))
 
         evalEntity.properties = evalAttributes
+
+        // Add indexes for commonly queried score fields
+        let scoreIndex = NSFetchIndexDescription(name: "byOverallScore", elements: [
+            NSFetchIndexElementDescription(property: evalAttributes.first { $0.name == "overallWeightedScore" }!, collationType: .binary)
+        ])
+        let placementIndex = NSFetchIndexDescription(name: "byPlacement", elements: [
+            NSFetchIndexElementDescription(property: evalAttributes.first { $0.name == "primaryPlacement" }!, collationType: .binary)
+        ])
+        let sellabilityIndex = NSFetchIndexDescription(name: "bySellability", elements: [
+            NSFetchIndexElementDescription(property: evalAttributes.first { $0.name == "sellabilityScore" }!, collationType: .binary)
+        ])
+        evalEntity.indexes = [scoreIndex, placementIndex, sellabilityIndex]
 
         // MARK: - EvaluationSession Entity (NEW)
 

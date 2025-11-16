@@ -24,9 +24,20 @@ struct GalleryView: View {
     )
     private var imageEvaluations: FetchedResults<ImageEvaluation>
 
+    // Initialize with batch fetching for performance
+    init() {
+        let request = ImageEvaluation.fetchRequest()
+        request.sortDescriptors = [
+            NSSortDescriptor(keyPath: \ImageEvaluation.dateAdded, ascending: false)
+        ]
+        request.fetchBatchSize = 20 // Load in batches for better memory management
+        request.returnsObjectsAsFaults = true // Don't load all properties immediately
+        _imageEvaluations = FetchRequest(fetchRequest: request, animation: .default)
+    }
+
     // MARK: - State
 
-    @State private var selectedImages: Set<ImageEvaluation> = []
+    @State private var selectedImageIDs: Set<NSManagedObjectID> = []
     @State private var isImporting = false
     @State private var isDragOver = false
     @State private var showingEvaluationSheet = false
@@ -239,7 +250,7 @@ struct GalleryView: View {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
                         ForEach(filteredImages.indices, id: \.self) { index in
                             let evaluation = filteredImages[index]
-                            let isSelected = selectedImages.contains(evaluation)
+                            let isSelected = selectedImageIDs.contains(evaluation.objectID)
                             let isBeingEvaluated = isImageBeingEvaluated(evaluation)
                             let isInQueue = isImageInQueue(evaluation) && !isBeingEvaluated
 
@@ -265,7 +276,7 @@ struct GalleryView: View {
                                 }
 
                                 Button(action: {
-                                    selectedImages = [evaluation]
+                                    selectedImageIDs = [evaluation.objectID]
                                     startEvaluation()
                                 }) {
                                     Label("Re-evaluate", systemImage: "brain")
@@ -274,7 +285,7 @@ struct GalleryView: View {
                                 Divider()
 
                                 Button(role: .destructive, action: {
-                                    selectedImages = [evaluation]
+                                    selectedImageIDs = [evaluation.objectID]
                                     showingDeleteConfirmation = true
                                 }) {
                                     Label("Delete", systemImage: "trash")
@@ -330,9 +341,9 @@ struct GalleryView: View {
         } message: {
             Text("Are you sure you want to delete \(selectedImages.count) selected image\(selectedImages.count == 1 ? "" : "s")? This will remove the image data and all evaluation results. This action cannot be undone.")
         }
-        .onChange(of: selectedImages) { _, _ in
+        .onChange(of: selectedImageIDs) { _, _ in
             // If no images selected, turn off selection filter
-            if selectedImages.isEmpty && showOnlySelected {
+            if selectedImageIDs.isEmpty && showOnlySelected {
                 showOnlySelected = false
             }
         }
@@ -363,9 +374,16 @@ struct GalleryView: View {
         let searchLower = searchText.lowercased()
 
         // Search in file path
-        if let path = evaluation.originalFilePath?.lowercased(),
-           path.contains(searchLower) {
-            return true
+        if let bookmarkData = evaluation.originalFilePath {
+            do {
+                var isStale = false
+                let url = try URL(resolvingBookmarkData: bookmarkData, bookmarkDataIsStale: &isStale)
+                if url.lastPathComponent.lowercased().contains(searchLower) {
+                    return true
+                }
+            } catch {
+                // Ignore bookmark resolution errors for search
+            }
         }
 
         // Search in evaluation text
@@ -385,11 +403,16 @@ struct GalleryView: View {
 
     // MARK: - Methods
 
+    // Helper computed property to get selected images from IDs
+    private var selectedImages: [ImageEvaluation] {
+        imageEvaluations.filter { selectedImageIDs.contains($0.objectID) }
+    }
+
     private func toggleSelection(_ evaluation: ImageEvaluation) {
-        if selectedImages.contains(evaluation) {
-            selectedImages.remove(evaluation)
+        if selectedImageIDs.contains(evaluation.objectID) {
+            selectedImageIDs.remove(evaluation.objectID)
         } else {
-            selectedImages.insert(evaluation)
+            selectedImageIDs.insert(evaluation.objectID)
         }
     }
 
@@ -420,11 +443,10 @@ struct GalleryView: View {
     }
 
     private func getFilename(_ evaluation: ImageEvaluation) -> String {
-        if let bookmarkData = evaluation.originalFilePath,
-           let data = Data(base64Encoded: bookmarkData) {
+        if let bookmarkData = evaluation.originalFilePath {
             do {
                 var isStale = false
-                let url = try URL(resolvingBookmarkData: data, bookmarkDataIsStale: &isStale)
+                let url = try URL(resolvingBookmarkData: bookmarkData, bookmarkDataIsStale: &isStale)
                 return url.lastPathComponent
             } catch {
                 return "Unknown"
@@ -500,7 +522,7 @@ struct GalleryView: View {
         do {
             try viewContext.save()
             // Clear selection after deletion
-            selectedImages.removeAll()
+            selectedImageIDs.removeAll()
             // Reset selection filter
             showOnlySelected = false
         } catch {
@@ -711,11 +733,10 @@ struct ImageThumbnailView: View {
     }
 
     private var filename: String {
-        if let bookmarkData = evaluation.originalFilePath,
-           let data = Data(base64Encoded: bookmarkData) {
+        if let bookmarkData = evaluation.originalFilePath {
             do {
                 var isStale = false
-                let url = try URL(resolvingBookmarkData: data, bookmarkDataIsStale: &isStale)
+                let url = try URL(resolvingBookmarkData: bookmarkData, bookmarkDataIsStale: &isStale)
                 return url.lastPathComponent
             } catch {
                 return "Unknown"
