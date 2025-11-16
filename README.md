@@ -2,6 +2,16 @@
 
 AI-powered photography evaluation tool for macOS using Anthropic's Claude API and advanced Core Image analysis.
 
+## 🆕 Recent Updates
+
+### November 2025
+- **Saliency Analysis**: Vision Framework integration for composition pattern detection
+- **Smart Folders**: Create dynamic collections with custom criteria
+- **Folder Monitoring**: Automatic image discovery with persistent folder access
+- **Sort Preferences**: Per-folder sort order and direction persistence
+- **Thumbnail System**: Efficient generation and caching for gallery views
+- **Data Storage**: Comprehensive evaluation history with saliency maps
+
 ## Overview
 
 Nature Image Evaluation helps photographers analyze and score their images based on professional criteria including composition, technical quality, commercial potential, and artistic merit. The app combines AI evaluation with technical image analysis to provide comprehensive feedback on your photography.
@@ -23,6 +33,7 @@ Nature Image Evaluation helps photographers analyze and score their images based
 ### Core Functionality
 - **AI-Powered Evaluation**: Uses Claude 3.5 Sonnet for intelligent image analysis
 - **Technical Analysis**: Core Image-based sharpness, noise, and contrast evaluation
+- **Saliency Analysis**: Vision Framework-based composition and attention mapping
 - **Multi-Criteria Scoring**:
   - Composition (30% weight)
   - Technical Quality (25% weight)
@@ -38,6 +49,9 @@ Nature Image Evaluation helps photographers analyze and score their images based
 - **Gallery View**: Clean grid layout with score badges and placement indicators
 - **Detailed View**: Full evaluation breakdown with technical metrics and AI reasoning
 - **Progress Tracking**: Real-time batch progress with per-image status
+- **Smart Folders**: Dynamic collections based on customizable criteria
+- **Per-Folder Preferences**: Each folder remembers its sort order and direction
+- **Saliency Overlays**: Visual heatmaps showing areas of visual attention
 
 ## Requirements
 
@@ -64,12 +78,15 @@ Nature Image Evaluation helps photographers analyze and score their images based
 - **SwiftUI + Observation**: Modern declarative UI with @Observable pattern
 - **Core Data**: SQLite-backed persistent storage with evaluation history
 - **Core Image + Metal**: GPU-accelerated technical image analysis
-- **Vision Framework**: Advanced image understanding and face detection
+- **Vision Framework**: Saliency detection and composition analysis
 - **Security-Scoped Bookmarks**: Persistent sandboxed file access
 
 ### Key Components
 - **EvaluationManager**: Central orchestrator for batch evaluations
 - **TechnicalAnalyzer**: Core Image-based sharpness, noise, and quality metrics
+- **SaliencyAnalyzer**: Vision Framework-based attention and composition analysis
+- **SmartFolderManager**: Dynamic collection management with custom criteria
+- **ThumbnailGenerator**: Efficient thumbnail generation and caching
 - **AnthropicAPIService**: Claude API integration with retry logic
 - **PromptLoader**: Dynamic prompt management supporting versioning
 - **ImageProcessor**: High-performance image resizing (max 1568px)
@@ -79,20 +96,25 @@ Nature Image Evaluation helps photographers analyze and score their images based
 ### ✅ Completed Features
 - Full AI evaluation pipeline with Claude 3.5 Sonnet
 - Technical image analysis (sharpness, noise, contrast)
+- Saliency analysis with composition pattern detection
+- Smart folders with dynamic criteria-based collections
+- Folder monitoring and automatic image discovery
+- Per-folder sort preferences (order and direction)
 - Batch evaluation with queue management
 - Gallery view with sorting and filtering
 - Detailed evaluation view with all metrics
 - Commercial metadata generation (SEO titles, keywords)
 - Visual evaluation status indicators
 - Persistent selection during evaluation
-- Core Data storage with evaluation history
+- Core Data storage with evaluation history and saliency data
+- Efficient thumbnail generation and caching
 - Security-scoped bookmark file access
 - Intelligent rate limiting and error handling
 
 ### 🚧 In Development
-- Collection/folder management UI
-- Sidebar navigation with smart folders
-- Saliency maps for composition analysis
+- Thematic grouping using Vision Framework
+- Advanced composition correlation analysis
+- Smart crop suggestions based on saliency
 
 ### 📋 Planned Features
 - [Image culling mode](https://github.com/kmichels/nature-image-evaluation/issues/1) for similar photo selection
@@ -116,12 +138,36 @@ Nature Image Evaluation helps photographers analyze and score their images based
 - **Placement**: PORTFOLIO (artistic), STORE (commercial), BOTH, or ARCHIVE
 - **Green tag**: Image has commercial metadata (SEO-optimized)
 
+### Smart Folders
+Create dynamic collections that automatically update based on criteria:
+- **Portfolio Quality**: Images scoring 8+ overall
+- **Needs Review**: Images not yet evaluated
+- **High Commercial Value**: Images with high sellability scores
+- **Custom Criteria**: Build your own with multiple rules and conditions
+
 ### Keyboard Shortcuts
 - **⌘I**: Import images
 - **⌘E**: Evaluate selected images
 - **⌘A**: Select all
 - **⌘D**: Delete selected
 - **Space**: Quick look at selected image
+
+## Data Storage & Analysis
+
+### Stored Evaluation Data
+Each evaluation stores comprehensive metrics:
+- **AI Scores**: Composition, quality, sellability, and artistic scores
+- **Technical Metrics**: Sharpness, blur type/amount, noise, contrast
+- **Saliency Data**: Compressed attention maps and composition patterns
+- **Commercial Metadata**: SEO-optimized titles, descriptions, keywords
+- **Evaluation History**: Track score changes over time
+
+### Composition Analysis
+Saliency data enables advanced insights:
+- **Pattern Detection**: Center, rule of thirds, scattered, off-center
+- **Visual Weight**: Center of mass and highest attention points
+- **Future Correlation**: Track which patterns score highest
+- **Smart Suggestions**: Crop recommendations based on attention areas
 
 ## Configuration
 
