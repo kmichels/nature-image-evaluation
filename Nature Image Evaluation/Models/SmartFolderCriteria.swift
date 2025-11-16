@@ -20,7 +20,7 @@ struct SmartFolderCriteria: Codable {
 }
 
 struct CriteriaRule: Codable, Identifiable {
-    let id = UUID()
+    var id = UUID()
     var criteriaType: CriteriaType
     var comparison: ComparisonOperator
     var value: CriteriaValue

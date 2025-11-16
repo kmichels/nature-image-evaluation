@@ -25,6 +25,7 @@ struct FolderGalleryView: View {
     @State private var evaluationCompletedCount = 0  // Trigger view refresh
     @State private var detailViewImage: ImageEvaluation?  // For showing detail view
     @State private var sortOption: SortOption = .name
+    @State private var sortAscending: Bool = true  // Sort direction
     @State private var filterOption: FilterOption = .all
     @State private var cachedFilteredImages: [URL] = []  // Cache sorted/filtered results
     @State private var thumbnailCache: [URL: NSImage] = [:]  // Cache thumbnails
@@ -107,26 +108,30 @@ struct FolderGalleryView: View {
             let eval1 = evaluationCache[url1] ?? nil
             let eval2 = evaluationCache[url2] ?? nil
 
+            let result: Bool
             switch sortOption {
             case .name:
-                return url1.lastPathComponent < url2.lastPathComponent
+                result = url1.lastPathComponent < url2.lastPathComponent
             case .dateModified:
                 let date1 = dateCache[url1] ?? Date.distantPast
                 let date2 = dateCache[url2] ?? Date.distantPast
-                return date1 > date2
+                result = date1 > date2
             case .overallScore:
                 let score1 = eval1?.currentEvaluation?.overallWeightedScore ?? -1
                 let score2 = eval2?.currentEvaluation?.overallWeightedScore ?? -1
-                return score1 > score2
+                result = score1 > score2
             case .sellability:
                 let score1 = eval1?.currentEvaluation?.sellabilityScore ?? -1
                 let score2 = eval2?.currentEvaluation?.sellabilityScore ?? -1
-                return score1 > score2
+                result = score1 > score2
             case .artisticScore:
                 let score1 = eval1?.currentEvaluation?.artisticScore ?? -1
                 let score2 = eval2?.currentEvaluation?.artisticScore ?? -1
-                return score1 > score2
+                result = score1 > score2
             }
+
+            // Apply sort direction
+            return sortAscending ? result : !result
         }
     }
 
@@ -149,13 +154,26 @@ struct FolderGalleryView: View {
                 .pickerStyle(.menu)
                 .frame(width: 150)
 
-                Picker("Sort", selection: $sortOption) {
-                    ForEach(SortOption.allCases, id: \.self) { option in
-                        Text(option.rawValue).tag(option)
+                HStack(spacing: 4) {
+                    Picker("Sort", selection: $sortOption) {
+                        ForEach(SortOption.allCases, id: \.self) { option in
+                            Text(option.rawValue).tag(option)
+                        }
                     }
+                    .pickerStyle(.menu)
+                    .frame(width: 130)
+
+                    Button(action: {
+                        sortAscending.toggle()
+                        updateFilteredImages()
+                        saveSortPreferences()
+                    }) {
+                        Image(systemName: sortAscending ? "arrow.up" : "arrow.down")
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(.borderless)
+                    .help(sortAscending ? "Sort ascending" : "Sort descending")
                 }
-                .pickerStyle(.menu)
-                .frame(width: 150)
 
                 Spacer()
 
@@ -263,6 +281,9 @@ struct FolderGalleryView: View {
             }
         }
         .task {
+            // Load sort preferences first
+            loadSortPreferences()
+
             // Only load images if we haven't loaded them yet for this folder
             if !hasLoadedInitialImages {
                 await loadFolderImages()
@@ -274,6 +295,10 @@ struct FolderGalleryView: View {
             hasLoadedInitialImages = false
             folderImages = []
             thumbnailCache = [:]
+
+            // Load sort preferences for new folder
+            loadSortPreferences()
+
             Task {
                 await loadFolderImages()
                 hasLoadedInitialImages = true
@@ -281,6 +306,7 @@ struct FolderGalleryView: View {
         }
         .onChange(of: sortOption) { _, _ in
             updateFilteredImages()
+            saveSortPreferences()
         }
         .onChange(of: filterOption) { _, _ in
             updateFilteredImages()
@@ -357,6 +383,28 @@ struct FolderGalleryView: View {
     }
 
     // MARK: - Helper Methods
+
+    private func saveSortPreferences() {
+        let sortKey = "folderSort_\(folder.id.uuidString)"
+        let directionKey = "folderSortDirection_\(folder.id.uuidString)"
+        UserDefaults.standard.set(sortOption.rawValue, forKey: sortKey)
+        UserDefaults.standard.set(sortAscending, forKey: directionKey)
+    }
+
+    private func loadSortPreferences() {
+        let sortKey = "folderSort_\(folder.id.uuidString)"
+        let directionKey = "folderSortDirection_\(folder.id.uuidString)"
+
+        if let savedSort = UserDefaults.standard.string(forKey: sortKey),
+           let option = SortOption(rawValue: savedSort) {
+            sortOption = option
+        }
+
+        // Check if we have a saved direction (might not exist for older data)
+        if UserDefaults.standard.object(forKey: directionKey) != nil {
+            sortAscending = UserDefaults.standard.bool(forKey: directionKey)
+        }
+    }
 
     private func loadFolderImages() async {
         isLoadingImages = true

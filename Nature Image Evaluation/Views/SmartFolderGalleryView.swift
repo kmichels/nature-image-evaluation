@@ -18,6 +18,7 @@ struct SmartFolderGalleryView: View {
     @State private var selectedImages = Set<ImageEvaluation>()
     @State private var selectedImageForDetail: ImageEvaluation?
     @State private var sortOption: SortOption = .dateAdded
+    @State private var sortAscending: Bool = false  // Default to descending for date
     @State private var filterOption: FilterOption = .all
     @State private var showingFilePicker = false
     @State private var showingEvaluationError = false
@@ -46,9 +47,11 @@ struct SmartFolderGalleryView: View {
             Text(evaluationError ?? "An error occurred during evaluation")
         }
         .onAppear {
+            loadSortPreferences()
             refreshImages()
         }
         .onChange(of: smartFolder) { _, _ in
+            loadSortPreferences()
             refreshImages()
         }
     }
@@ -71,20 +74,35 @@ struct SmartFolderGalleryView: View {
             Divider()
                 .frame(height: 20)
 
-            // Sort menu
-            Menu {
-                ForEach(SortOption.allCases, id: \.self) { option in
-                    Button(action: { sortOption = option }) {
-                        HStack {
-                            Text(option.rawValue)
-                            if sortOption == option {
-                                Image(systemName: "checkmark")
+            // Sort menu with direction toggle
+            HStack(spacing: 4) {
+                Menu {
+                    ForEach(SortOption.allCases, id: \.self) { option in
+                        Button(action: {
+                            sortOption = option
+                            saveSortPreferences()
+                        }) {
+                            HStack {
+                                Text(option.rawValue)
+                                if sortOption == option {
+                                    Image(systemName: "checkmark")
+                                }
                             }
                         }
                     }
+                } label: {
+                    Label("Sort: \(sortOption.rawValue)", systemImage: "arrow.up.arrow.down")
                 }
-            } label: {
-                Label("Sort: \(sortOption.rawValue)", systemImage: "arrow.up.arrow.down")
+
+                Button(action: {
+                    sortAscending.toggle()
+                    saveSortPreferences()
+                }) {
+                    Image(systemName: sortAscending ? "arrow.up" : "arrow.down")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
+                .help(sortAscending ? "Sort ascending" : "Sort descending")
             }
 
             // Filter menu
@@ -233,6 +251,28 @@ struct SmartFolderGalleryView: View {
 
     // MARK: - Helper Methods
 
+    private func saveSortPreferences() {
+        let sortKey = "smartFolderSort_\(smartFolder.id?.uuidString ?? "default")"
+        let directionKey = "smartFolderSortDirection_\(smartFolder.id?.uuidString ?? "default")"
+        UserDefaults.standard.set(sortOption.rawValue, forKey: sortKey)
+        UserDefaults.standard.set(sortAscending, forKey: directionKey)
+    }
+
+    private func loadSortPreferences() {
+        let sortKey = "smartFolderSort_\(smartFolder.id?.uuidString ?? "default")"
+        let directionKey = "smartFolderSortDirection_\(smartFolder.id?.uuidString ?? "default")"
+
+        if let savedSort = UserDefaults.standard.string(forKey: sortKey),
+           let option = SortOption(rawValue: savedSort) {
+            sortOption = option
+        }
+
+        // Check if we have a saved direction (might not exist for older data)
+        if UserDefaults.standard.object(forKey: directionKey) != nil {
+            sortAscending = UserDefaults.standard.bool(forKey: directionKey)
+        }
+    }
+
     private var filteredAndSortedImages: [ImageEvaluation] {
         let baseImages = showOnlySelected ? Array(selectedImages) : images
 
@@ -240,9 +280,12 @@ struct SmartFolderGalleryView: View {
             filterOption.matches(image)
         }
 
-        return filtered.sorted { first, second in
+        let sorted = filtered.sorted { first, second in
             sortOption.compare(first, second)
         }
+
+        // Apply sort direction
+        return sortAscending ? sorted.reversed() : sorted
     }
 
     private func refreshImages() {
