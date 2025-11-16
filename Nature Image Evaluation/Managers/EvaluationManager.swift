@@ -105,8 +105,15 @@ final class EvaluationManager {
 
     // MARK: - Initialization
 
-    init(persistenceController: PersistenceController = .shared) {
+    init(persistenceController: PersistenceController) {
         self.persistenceController = persistenceController
+        self.viewContext = persistenceController.container.viewContext
+        self.apiService = AnthropicAPIService()
+    }
+
+    // Convenience initializer that can only be called from MainActor context
+    init() {
+        self.persistenceController = PersistenceController.shared
         self.viewContext = persistenceController.container.viewContext
         self.apiService = AnthropicAPIService()
     }
