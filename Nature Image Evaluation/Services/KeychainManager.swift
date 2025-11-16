@@ -23,7 +23,9 @@ final class KeychainManager {
     ///   - provider: The API provider (Anthropic or OpenAI)
     func saveAPIKey(_ key: String, for provider: Constants.APIProvider) throws {
         let account = accountName(for: provider)
-        let data = key.data(using: .utf8)!
+        guard let data = key.data(using: .utf8) else {
+            throw KeychainError.invalidKeyData
+        }
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -120,6 +122,7 @@ final class KeychainManager {
 
 enum KeychainError: LocalizedError {
     case unhandledError(OSStatus)
+    case invalidKeyData
 
     var errorDescription: String? {
         switch self {
@@ -128,6 +131,8 @@ enum KeychainError: LocalizedError {
                 return "Keychain error: \(message)"
             }
             return "Unknown keychain error (code: \(status))"
+        case .invalidKeyData:
+            return "Invalid API key data - could not convert to UTF-8"
         }
     }
 }

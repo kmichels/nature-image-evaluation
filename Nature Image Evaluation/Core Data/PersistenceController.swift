@@ -8,6 +8,7 @@
 import CoreData
 
 struct PersistenceController {
+    @MainActor
     static let shared = PersistenceController()
 
     @MainActor
@@ -105,6 +106,7 @@ struct PersistenceController {
                  */
                 print("Core Data error: \(error), \(error.userInfo)")
 
+                #if DEBUG
                 // Try to delete and recreate the store for development
                 if let storeURL = storeDescription.url {
                     try? FileManager.default.removeItem(at: storeURL)
@@ -117,6 +119,14 @@ struct PersistenceController {
                         }
                     }
                 }
+                #else
+                // In production, don't delete data - show proper error
+                fatalError("""
+                    Core Data store is corrupted and cannot be loaded.
+                    Please contact support at https://github.com/kmichels/nature-image-evaluation/issues
+                    Error: \(error.localizedDescription)
+                    """)
+                #endif
             }
         }
         container.viewContext.automaticallyMergesChangesFromParent = true

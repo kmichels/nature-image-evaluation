@@ -11,6 +11,7 @@ import Observation
 import AppKit
 
 /// Orchestrates the entire image evaluation workflow
+@MainActor
 @Observable
 final class EvaluationManager {
 
@@ -552,13 +553,14 @@ final class EvaluationManager {
         }
         result.isCurrentEvaluation = true
 
-        // Add to history
+        // Add to history using type-safe Core Data methods
         if imageEval.evaluationHistory == nil {
             imageEval.evaluationHistory = NSSet()
         }
-        // Use mutableSetValue for Core Data relationship manipulation
-        let history = imageEval.mutableSetValue(forKey: "evaluationHistory")
-        history.add(result)
+        // Create mutable copy for safe manipulation
+        let currentHistory = imageEval.evaluationHistory?.mutableCopy() as? NSMutableSet ?? NSMutableSet()
+        currentHistory.add(result)
+        imageEval.evaluationHistory = currentHistory.copy() as? NSSet
 
         // Set as current
         result.imageEvaluation = imageEval
@@ -570,12 +572,13 @@ final class EvaluationManager {
             imageEval.firstEvaluatedDate = Date()
         }
 
-        // Link to session
+        // Link to session using type-safe methods
         if let session = currentSession {
             result.session = session
-            // Use mutableSetValue for Core Data relationship manipulation
-            let evaluations = session.mutableSetValue(forKey: "evaluations")
-            evaluations.add(result)
+            // Create mutable copy for safe manipulation
+            let currentEvaluations = session.evaluations?.mutableCopy() as? NSMutableSet ?? NSMutableSet()
+            currentEvaluations.add(result)
+            session.evaluations = currentEvaluations.copy() as? NSSet
         }
 
         // Log if this is a re-evaluation
@@ -784,12 +787,13 @@ final class EvaluationManager {
             imageEval.firstEvaluatedDate = Date()
         }
 
-        // Link to session
+        // Link to session using type-safe methods
         if let session = currentSession {
             result.session = session
-            // Use mutableSetValue for Core Data relationship manipulation
-            let evaluations = session.mutableSetValue(forKey: "evaluations")
-            evaluations.add(result)
+            // Create mutable copy for safe manipulation
+            let currentEvaluations = session.evaluations?.mutableCopy() as? NSMutableSet ?? NSMutableSet()
+            currentEvaluations.add(result)
+            session.evaluations = currentEvaluations.copy() as? NSSet
         }
 
         try? viewContext.save()

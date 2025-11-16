@@ -36,6 +36,25 @@ final class AnthropicAPIService: APIProviderProtocol {
         self.session = session
     }
 
+    // MARK: - Helper Methods
+
+    private func sanitizeError(_ error: Error) -> String {
+        // Remove any API key patterns from error messages
+        var message = error.localizedDescription
+        message = message.replacingOccurrences(
+            of: #"sk-ant-[a-zA-Z0-9_-]+"#,
+            with: "[REDACTED]",
+            options: .regularExpression
+        )
+        // Also remove any x-api-key headers that might be exposed
+        message = message.replacingOccurrences(
+            of: #"x-api-key[\":\s]+[^\s\"]+"#,
+            with: "x-api-key: [REDACTED]",
+            options: .regularExpression
+        )
+        return message
+    }
+
     // MARK: - APIProviderProtocol
 
     func evaluateImage(
@@ -212,7 +231,7 @@ final class AnthropicAPIService: APIProviderProtocol {
                    nsError.domain == NSURLErrorDomain,
                    nsError.code == NSURLErrorCannotFindHost {
                     print("DNS resolution failed. This may be a macOS sandbox issue.")
-                    print("Error details: \(nsError.localizedDescription)")
+                    print("Error details: \(sanitizeError(nsError))")
                     throw APIError.networkError(NSError(
                         domain: NSURLErrorDomain,
                         code: NSURLErrorCannotFindHost,
@@ -249,8 +268,8 @@ final class AnthropicAPIService: APIProviderProtocol {
         do {
             return try decoder.decode(EvaluationData.self, from: jsonData)
         } catch {
-            print("❌ Failed to decode JSON: \(error)")
-            throw APIError.parsingFailed("JSON decoding failed: \(error)")
+            print("❌ Failed to decode JSON: \(sanitizeError(error))")
+            throw APIError.parsingFailed("JSON decoding failed: \(sanitizeError(error))")
         }
     }
 }

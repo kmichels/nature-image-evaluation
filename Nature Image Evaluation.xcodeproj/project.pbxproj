@@ -15,6 +15,7 @@
 		71B757DC2EAFCCB900DF6430 /* TECHNICAL_RESEARCH.md in Resources */ = {isa = PBXBuildFile; fileRef = 71B757B62EAFCCB900DF6430 /* TECHNICAL_RESEARCH.md */; };
 		71B757DD2EAFCCB900DF6430 /* CLAUDE.md in Resources */ = {isa = PBXBuildFile; fileRef = 71B757B02EAFCCB900DF6430 /* CLAUDE.md */; };
 		71B757DE2EAFCCB900DF6430 /* ENTITLEMENTS.md in Resources */ = {isa = PBXBuildFile; fileRef = 71B757B12EAFCCB900DF6430 /* ENTITLEMENTS.md */; };
+		71C8AD732ECA1B4D00ABD08A /* Saliency Map Research.txt in Resources */ = {isa = PBXBuildFile; fileRef = 71C8AD722ECA1B3900ABD08A /* Saliency Map Research.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +38,7 @@
 		71B757CB2EAFCCB900DF6430 /* Nature Image Evaluation.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "Nature Image Evaluation.xcodeproj"; sourceTree = "<group>"; };
 		71B757CE2EAFCCB900DF6430 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		71B757CF2EAFCCB900DF6430 /* sample-CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "sample-CLAUDE.md"; sourceTree = "<group>"; };
+		71C8AD722ECA1B3900ABD08A /* Saliency Map Research.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Saliency Map Research.txt"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -96,6 +98,7 @@
 		71B757B72EAFCCB900DF6430 /* docs */ = {
 			isa = PBXGroup;
 			children = (
+				71C8AD722ECA1B3900ABD08A /* Saliency Map Research.txt */,
 				71B757B12EAFCCB900DF6430 /* ENTITLEMENTS.md */,
 				71B757B22EAFCCB900DF6430 /* MVP_COMPONENTS.md */,
 				71B757B32EAFCCB900DF6430 /* PROJECT_STRUCTURE.md */,
@@ -272,6 +275,7 @@
 				71B757D82EAFCCB900DF6430 /* Suggested_AI_Prompt.txt in Resources */,
 				71B757D92EAFCCB900DF6430 /* MVP_COMPONENTS.md in Resources */,
 				71B757DA2EAFCCB900DF6430 /* PROJECT_STRUCTURE.md in Resources */,
+				71C8AD732ECA1B4D00ABD08A /* Saliency Map Research.txt in Resources */,
 				71B757DB2EAFCCB900DF6430 /* README.md in Resources */,
 				71B757DC2EAFCCB900DF6430 /* TECHNICAL_RESEARCH.md in Resources */,
 				71B757DD2EAFCCB900DF6430 /* CLAUDE.md in Resources */,
