@@ -222,4 +222,183 @@ class SaliencyAnalyzer: ObservableObject {
             .filter { $0.confidence > threshold }
             .map { $0.boundingBox }
     }
+
+    // MARK: - Data Storage Support
+
+    /// Generate saliency data for storage in Core Data
+    func generateSaliencyDataForStorage(from image: NSImage) async -> SaliencyStorageData? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+
+        let request = VNGenerateAttentionBasedSaliencyImageRequest()
+        let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+
+        do {
+            try requestHandler.perform([request])
+
+            guard let observation = request.results?.first as? VNSaliencyImageObservation else {
+                return nil
+            }
+
+            // Get raw saliency map as compressed data
+            let pixelBuffer = observation.pixelBuffer
+            let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+            guard let saliencyData = compressSaliencyMap(ciImage) else {
+                return nil
+            }
+
+            // Get salient regions
+            let hotspots = getSalientRegions(from: observation)
+
+            // Analyze composition pattern
+            let pattern = analyzeCompositionPattern(from: observation)
+
+            // Find highest saliency point and center of mass
+            let (highestPoint, centerOfMass) = analyzeSaliencyDistribution(from: observation)
+
+            return SaliencyStorageData(
+                mapData: saliencyData,
+                hotspots: hotspots,
+                compositionPattern: pattern,
+                highestPoint: highestPoint,
+                centerOfMass: centerOfMass
+            )
+        } catch {
+            print("Error generating saliency data for storage: \(error)")
+            return nil
+        }
+    }
+
+    /// Compress saliency map for efficient storage
+    private func compressSaliencyMap(_ ciImage: CIImage) -> Data? {
+        // Convert to lower resolution grayscale for storage
+        let targetSize = CGSize(width: 256, height: 256)
+        let scaleX = targetSize.width / ciImage.extent.width
+        let scaleY = targetSize.height / ciImage.extent.height
+        let scale = min(scaleX, scaleY)
+
+        let scaledImage = ciImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+
+        // Convert to JPEG with moderate compression
+        guard let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) else {
+            return nil
+        }
+
+        let nsImage = NSImage(cgImage: cgImage, size: targetSize)
+        guard let tiffData = nsImage.tiffRepresentation,
+              let bitmapRep = NSBitmapImageRep(data: tiffData),
+              let jpegData = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: 0.7]) else {
+            return nil
+        }
+
+        return jpegData
+    }
+
+    /// Analyze composition pattern from saliency observation
+    private func analyzeCompositionPattern(from observation: VNSaliencyImageObservation) -> String {
+        let hotspots = getSalientRegions(from: observation, threshold: 0.6)
+
+        guard !hotspots.isEmpty else {
+            return "diffuse"
+        }
+
+        // Calculate average position of salient regions
+        var avgX: CGFloat = 0
+        var avgY: CGFloat = 0
+        var totalWeight: CGFloat = 0
+
+        for rect in hotspots {
+            let weight = rect.width * rect.height
+            avgX += rect.midX * weight
+            avgY += rect.midY * weight
+            totalWeight += weight
+        }
+
+        if totalWeight > 0 {
+            avgX /= totalWeight
+            avgY /= totalWeight
+        }
+
+        // Determine composition pattern
+        let centerThreshold: CGFloat = 0.2
+        let thirdThreshold: CGFloat = 0.15
+
+        if abs(avgX - 0.5) < centerThreshold && abs(avgY - 0.5) < centerThreshold {
+            return "center"
+        } else if abs(avgX - 0.33) < thirdThreshold || abs(avgX - 0.67) < thirdThreshold {
+            if abs(avgY - 0.33) < thirdThreshold || abs(avgY - 0.67) < thirdThreshold {
+                return "rule_of_thirds"
+            }
+            return "vertical_thirds"
+        } else if abs(avgY - 0.33) < thirdThreshold || abs(avgY - 0.67) < thirdThreshold {
+            return "horizontal_thirds"
+        } else if hotspots.count > 5 {
+            return "scattered"
+        } else {
+            return "off_center"
+        }
+    }
+
+    /// Analyze saliency distribution to find highest point and center of mass
+    private func analyzeSaliencyDistribution(from observation: VNSaliencyImageObservation) -> (highestPoint: CGPoint?, centerOfMass: CGPoint?) {
+        let hotspots = getSalientRegions(from: observation, threshold: 0.3)
+
+        guard !hotspots.isEmpty else {
+            return (nil, nil)
+        }
+
+        // Find the highest confidence region (usually the most salient)
+        var highestPoint: CGPoint?
+        if let firstHotspot = hotspots.first {
+            highestPoint = CGPoint(x: firstHotspot.midX, y: firstHotspot.midY)
+        }
+
+        // Calculate center of mass
+        var totalX: CGFloat = 0
+        var totalY: CGFloat = 0
+        var totalWeight: CGFloat = 0
+
+        for rect in hotspots {
+            let weight = rect.width * rect.height
+            totalX += rect.midX * weight
+            totalY += rect.midY * weight
+            totalWeight += weight
+        }
+
+        var centerOfMass: CGPoint?
+        if totalWeight > 0 {
+            centerOfMass = CGPoint(x: totalX / totalWeight, y: totalY / totalWeight)
+        }
+
+        return (highestPoint, centerOfMass)
+    }
+
+    /// Reconstruct saliency overlay from stored data
+    func reconstructSaliencyOverlay(from data: Data, originalImageSize: CGSize) -> NSImage? {
+        guard let nsImage = NSImage(data: data) else {
+            return nil
+        }
+
+        // Scale back up to original size
+        let scaledImage = NSImage(size: originalImageSize)
+        scaledImage.lockFocus()
+        nsImage.draw(in: NSRect(origin: .zero, size: originalImageSize),
+                    from: NSRect(origin: .zero, size: nsImage.size),
+                    operation: .sourceOver,
+                    fraction: 1.0)
+        scaledImage.unlockFocus()
+
+        return scaledImage
+    }
+}
+
+// MARK: - Storage Data Structure
+
+struct SaliencyStorageData {
+    let mapData: Data
+    let hotspots: [CGRect]
+    let compositionPattern: String
+    let highestPoint: CGPoint?
+    let centerOfMass: CGPoint?
 }

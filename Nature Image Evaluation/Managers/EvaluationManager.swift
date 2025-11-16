@@ -405,6 +405,12 @@ final class EvaluationManager {
             print("  🎨 Artistic intent: \(technicalAnalysis.intent.probableTechnique.rawValue) (confidence: \(Int(technicalAnalysis.intent.confidence * 100))%)")
         }
 
+        // Generate saliency analysis (local, Vision Framework)
+        let saliencyData = await SaliencyAnalyzer.shared.generateSaliencyDataForStorage(from: processedImage)
+        if let pattern = saliencyData?.compositionPattern {
+            print("  📍 Composition pattern: \(pattern)")
+        }
+
         // Build enhanced prompt with technical context
         let enhancedPrompt = buildEnhancedPrompt(
             basePrompt: prompt,
@@ -426,18 +432,20 @@ final class EvaluationManager {
 
         print("📊 Evaluation complete - Score: \(response.overallWeightedScore), Placement: \(response.primaryPlacement)")
 
-        // Store the evaluation with technical metrics
+        // Store the evaluation with technical metrics and saliency
         try storeEvaluationResult(
             for: imageEval,
             response: response,
-            technicalAnalysis: technicalAnalysis
+            technicalAnalysis: technicalAnalysis,
+            saliencyData: saliencyData
         )
     }
 
     private func storeEvaluationResult(
         for imageEval: ImageEvaluation,
         response: EvaluationResponse,
-        technicalAnalysis: TechnicalAnalysisResult
+        technicalAnalysis: TechnicalAnalysisResult,
+        saliencyData: SaliencyStorageData?
     ) throws {
         // Check if this is a re-evaluation
         let previousResult = imageEval.currentEvaluation
@@ -481,6 +489,39 @@ final class EvaluationManager {
         result.technicalExposure = technicalAnalysis.metrics.exposure.distribution
         result.technicalArtisticTechnique = technicalAnalysis.intent.probableTechnique.rawValue
         result.technicalIntentConfidence = technicalAnalysis.intent.confidence
+
+        // Store saliency analysis data from Vision Framework
+        if let saliencyData = saliencyData {
+            result.saliencyMapData = saliencyData.mapData
+            result.saliencyCompositionPattern = saliencyData.compositionPattern
+            result.saliencyAnalysisDate = Date()
+
+            // Convert CGRect array to dictionary array for storage
+            result.saliencyHotspots = saliencyData.hotspots.map { rect in
+                [
+                    "x": Double(rect.origin.x),
+                    "y": Double(rect.origin.y),
+                    "width": Double(rect.size.width),
+                    "height": Double(rect.size.height)
+                ]
+            }
+
+            // Store highest point if available
+            if let highestPoint = saliencyData.highestPoint {
+                result.saliencyHighestPoint = [
+                    "x": Double(highestPoint.x),
+                    "y": Double(highestPoint.y)
+                ]
+            }
+
+            // Store center of mass if available
+            if let centerOfMass = saliencyData.centerOfMass {
+                result.saliencyCenterOfMass = [
+                    "x": Double(centerOfMass.x),
+                    "y": Double(centerOfMass.y)
+                ]
+            }
+        }
 
 
         // API usage

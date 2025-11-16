@@ -59,6 +59,14 @@ extension EvaluationResult {
     @NSManaged public var technicalArtisticTechnique: String?
     @NSManaged public var technicalIntentConfidence: Float
 
+    // Saliency Analysis Data (NEW - Vision Framework)
+    @NSManaged public var saliencyMapData: Data?
+    @NSManaged public var saliencyHotspots: [[String: Double]]?
+    @NSManaged public var saliencyCompositionPattern: String?
+    @NSManaged public var saliencyAnalysisDate: Date?
+    @NSManaged public var saliencyHighestPoint: [String: Double]?
+    @NSManaged public var saliencyCenterOfMass: [String: Double]?
+
     // API Metadata
     @NSManaged public var inputTokens: Int32
     @NSManaged public var outputTokens: Int32

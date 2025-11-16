@@ -136,6 +136,14 @@ class CoreDataModel {
         evalAttributes.append(createAttribute(name: "technicalArtisticTechnique", type: .stringAttributeType, optional: true))
         evalAttributes.append(createAttribute(name: "technicalIntentConfidence", type: .floatAttributeType, optional: true))
 
+        // Saliency Analysis Data (NEW - Vision Framework)
+        evalAttributes.append(createAttribute(name: "saliencyMapData", type: .binaryDataAttributeType, optional: true, allowsExternalStorage: true))
+        evalAttributes.append(createAttribute(name: "saliencyHotspots", type: .transformableAttributeType, optional: true, transformerName: "NSSecureUnarchiveFromDataTransformer"))
+        evalAttributes.append(createAttribute(name: "saliencyCompositionPattern", type: .stringAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "saliencyAnalysisDate", type: .dateAttributeType, optional: true))
+        evalAttributes.append(createAttribute(name: "saliencyHighestPoint", type: .transformableAttributeType, optional: true, transformerName: "NSSecureUnarchiveFromDataTransformer"))
+        evalAttributes.append(createAttribute(name: "saliencyCenterOfMass", type: .transformableAttributeType, optional: true, transformerName: "NSSecureUnarchiveFromDataTransformer"))
+
         evalEntity.properties = evalAttributes
 
         // MARK: - EvaluationSession Entity (NEW)
