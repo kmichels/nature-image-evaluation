@@ -8,6 +8,7 @@
 import Foundation
 import CoreData
 import Observation
+import os.log
 import AppKit
 
 /// Orchestrates the entire image evaluation workflow
@@ -288,7 +289,7 @@ final class EvaluationManager {
                         successfulEvaluations += 1
                     } catch {
                         failedEvaluations += 1
-                        print("Error evaluating image: \(error)")
+                        AppLogger.evaluation.error("❌ Error evaluating image: \(error.localizedDescription)")
                         currentError = error
 
                         // Check if it's a rate limit error
@@ -303,7 +304,7 @@ final class EvaluationManager {
                                 successfulEvaluations += 1
                                 failedEvaluations -= 1 // Correct the count since retry succeeded
                             } catch {
-                                print("Retry failed: \(error)")
+                                AppLogger.evaluation.warning("⚠️ Retry failed: \(error.localizedDescription)")
                                 currentError = error
                                 // Don't change failedEvaluations - it was already incremented for this image
                                 // Create failed evaluation record for tracking

@@ -18,7 +18,9 @@ struct FolderGalleryView: View {
     @State private var folderImages: [URL] = []
     @State private var isLoadingImages = true
     @State private var loadError: Error?
-    @State private var selectedImages: Set<URL> = []
+    @State private var selectedImages: Set<URL> = []  // URL-based selection
+    @State private var lastSelectedURL: URL?  // For shift-click range selection
+    @State private var lastSelectedIndex: Int?  // For shift-click range selection
     @State private var showingEvaluationSheet = false
     @State private var evaluationManager = EvaluationManager()
     @State private var folderURL: URL?  // Store resolved folder URL for security scope
@@ -182,6 +184,42 @@ struct FolderGalleryView: View {
                         .foregroundStyle(.secondary)
                         .font(.caption)
 
+                    // Selection Management Menu
+                    Menu {
+                        Button(action: {
+                            selectedImages = Set(cachedFilteredImages)
+                            lastSelectedURL = cachedFilteredImages.last
+                            lastSelectedIndex = cachedFilteredImages.count - 1
+                        }) {
+                            Label("Select All", systemImage: "checkmark.rectangle.stack.fill")
+                        }
+                        .keyboardShortcut("a", modifiers: .command)
+                        .disabled(selectedImages.count == cachedFilteredImages.count)
+
+                        Button(action: {
+                            selectedImages.removeAll()
+                            lastSelectedURL = nil
+                            lastSelectedIndex = nil
+                        }) {
+                            Label("Clear Selection", systemImage: "xmark.rectangle")
+                        }
+                        .keyboardShortcut(.escape, modifiers: [])
+
+                        Button(action: {
+                            let current = selectedImages
+                            let all = Set(cachedFilteredImages)
+                            selectedImages = all.subtracting(current)
+                            lastSelectedURL = nil
+                            lastSelectedIndex = nil
+                        }) {
+                            Label("Invert Selection", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    } label: {
+                        Label("Selection", systemImage: "checklist")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+
                     Button(action: {
                         showOnlySelected.toggle()
                         updateFilteredImages()
@@ -190,6 +228,23 @@ struct FolderGalleryView: View {
                               systemImage: showOnlySelected ? "rectangle.grid.2x2" : "checkmark.rectangle.stack")
                     }
                     .disabled(selectedImages.isEmpty)
+                } else {
+                    // Show selection menu even when nothing selected
+                    Menu {
+                        Button(action: {
+                            selectedImages = Set(cachedFilteredImages)
+                            lastSelectedURL = cachedFilteredImages.last
+                            lastSelectedIndex = cachedFilteredImages.count - 1
+                        }) {
+                            Label("Select All", systemImage: "checkmark.rectangle.stack.fill")
+                        }
+                        .keyboardShortcut("a", modifiers: .command)
+                        .disabled(cachedFilteredImages.isEmpty)
+                    } label: {
+                        Label("Select", systemImage: "checklist")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
                 }
 
                 Button("Evaluate Selected") {
@@ -251,14 +306,15 @@ struct FolderGalleryView: View {
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(cachedFilteredImages, id: \.self) { imageURL in
+                        ForEach(Array(cachedFilteredImages.enumerated()), id: \.element) { index, imageURL in
                             FolderImageThumbnail(
                                 url: imageURL,
                                 isSelected: selectedImages.contains(imageURL),
                                 existingEvaluation: existingEvaluation(for: imageURL),
                                 thumbnail: thumbnailCache[imageURL],
-                                onTap: {
-                                    toggleSelection(imageURL)
+                                index: index,
+                                onSelection: { modifiers in
+                                    handleSelection(imageURL, index: index, modifiers: modifiers)
                                 },
                                 onDoubleTap: {
                                     if let evaluation = existingEvaluation(for: imageURL) {
@@ -380,6 +436,26 @@ struct FolderGalleryView: View {
             ImageDetailView(evaluation: image)
                 .environment(\.managedObjectContext, viewContext)
         }
+        .focusable()
+        .onKeyPress(.escape) {
+            if !selectedImages.isEmpty {
+                selectedImages.removeAll()
+                lastSelectedURL = nil
+                lastSelectedIndex = nil
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(keys: [.init("a")]) { press in
+            // Check if command key is pressed
+            if press.modifiers.contains(.command) {
+                selectedImages = Set(cachedFilteredImages)
+                lastSelectedURL = cachedFilteredImages.last
+                lastSelectedIndex = cachedFilteredImages.count - 1
+                return .handled
+            }
+            return .ignored
+        }
     }
 
     // MARK: - Helper Methods
@@ -438,11 +514,38 @@ struct FolderGalleryView: View {
         }
     }
 
-    private func toggleSelection(_ url: URL) {
-        if selectedImages.contains(url) {
-            selectedImages.remove(url)
+    private func handleSelection(_ url: URL, index: Int, modifiers: EventModifiers) {
+        if modifiers.contains(.command) {
+            // CMD+click: Toggle individual selection
+            if selectedImages.contains(url) {
+                selectedImages.remove(url)
+                if lastSelectedURL == url {
+                    lastSelectedURL = nil
+                    lastSelectedIndex = nil
+                }
+            } else {
+                selectedImages.insert(url)
+                lastSelectedURL = url
+                lastSelectedIndex = index
+            }
+        } else if modifiers.contains(.shift), let lastIdx = lastSelectedIndex {
+            // SHIFT+click: Range selection
+            let minIdx = min(lastIdx, index)
+            let maxIdx = max(lastIdx, index)
+            let allURLs = cachedFilteredImages
+
+            for idx in minIdx...maxIdx {
+                if idx < allURLs.count {
+                    selectedImages.insert(allURLs[idx])
+                }
+            }
+            lastSelectedURL = url
+            lastSelectedIndex = index
         } else {
-            selectedImages.insert(url)
+            // Regular click: Exclusive selection
+            selectedImages = [url]
+            lastSelectedURL = url
+            lastSelectedIndex = index
         }
     }
 
@@ -615,7 +718,8 @@ struct FolderImageThumbnail: View {
     let isSelected: Bool
     let existingEvaluation: ImageEvaluation?
     let thumbnail: NSImage?  // Passed from parent
-    let onTap: () -> Void
+    var index: Int = 0
+    let onSelection: (EventModifiers) -> Void
     let onDoubleTap: () -> Void
     let onThumbnailLoaded: ((NSImage) -> Void)?
 
@@ -697,9 +801,29 @@ struct FolderImageThumbnail: View {
         .onTapGesture(count: 2) {
             onDoubleTap()
         }
-        .onTapGesture(count: 1) {
-            onTap()
-        }
+        .simultaneousGesture(
+            TapGesture()
+                .onEnded { _ in
+                    // Get current event modifiers
+                    let modifiers = NSEvent.modifierFlags
+                    var eventModifiers = EventModifiers()
+
+                    if modifiers.contains(.command) {
+                        eventModifiers.insert(.command)
+                    }
+                    if modifiers.contains(.shift) {
+                        eventModifiers.insert(.shift)
+                    }
+                    if modifiers.contains(.option) {
+                        eventModifiers.insert(.option)
+                    }
+                    if modifiers.contains(.control) {
+                        eventModifiers.insert(.control)
+                    }
+
+                    onSelection(eventModifiers)
+                }
+        )
         .task {
             // Only load thumbnail if we don't have one cached
             if thumbnail == nil && !isLoadingThumbnail {

@@ -51,6 +51,9 @@ class ThumbnailGenerator {
 
     /// Generate thumbnail from file URL and save to Core Data
     private func generateAndSaveThumbnail(from url: URL, for evaluation: ImageEvaluation, context: NSManagedObjectContext) async -> Data? {
+        // Capture the objectID to avoid Sendable issues
+        let evaluationID = evaluation.objectID
+
         // Use detached task for background processing
         return await Task.detached(priority: .background) {
             // Use FileHandle for more controlled file access
@@ -75,19 +78,21 @@ class ThumbnailGenerator {
                     fileHandle.readDataToEndOfFile()
                 }
 
-                let thumbnailData = autoreleasepool {
-                    guard let image = NSImage(data: imageData) else {
-                        print("Failed to create image from data: \(url.path)")
-                        return nil as Data?
-                    }
+                let thumbnailData = await MainActor.run {
+                    autoreleasepool {
+                        guard let image = NSImage(data: imageData) else {
+                            print("Failed to create image from data: \(url.path)")
+                            return nil as Data?
+                        }
 
-                    // Clear image data reference immediately after creating NSImage
-                    guard let thumbnail = self.imageProcessor.generateThumbnail(image: image) else {
-                        print("Failed to generate thumbnail for: \(url.path)")
-                        return nil as Data?
-                    }
+                        // Clear image data reference immediately after creating NSImage
+                        guard let thumbnail = self.imageProcessor.generateThumbnail(image: image) else {
+                            print("Failed to generate thumbnail for: \(url.path)")
+                            return nil as Data?
+                        }
 
-                    return self.imageProcessor.thumbnailToData(thumbnail)
+                        return self.imageProcessor.thumbnailToData(thumbnail)
+                    }
                 }
 
                 guard let thumbnailData = thumbnailData else {
@@ -96,8 +101,11 @@ class ThumbnailGenerator {
 
                 // Save to Core Data on the correct context
                 await context.perform {
-                    evaluation.thumbnailData = thumbnailData
-                    try? context.save()
+                    // Re-fetch the object using the ID
+                    if let evaluation = try? context.existingObject(with: evaluationID) as? ImageEvaluation {
+                        evaluation.thumbnailData = thumbnailData
+                        try? context.save()
+                    }
                 }
 
                 return thumbnailData

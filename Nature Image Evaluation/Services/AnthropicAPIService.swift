@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import os.log
 
 /// Anthropic Claude API implementation
 final class AnthropicAPIService: APIProviderProtocol {
@@ -189,11 +190,12 @@ final class AnthropicAPIService: APIProviderProtocol {
     private func performRequestWithRetry(
         request: URLRequest,
         apiKey: String,
-        maxRetries: Int = Constants.maxNetworkRetries
+        maxRetries: Int? = nil
     ) async throws -> EvaluationResponse {
+        let retryLimit = maxRetries ?? Constants.maxNetworkRetries
         var currentRetry = 0
 
-        while currentRetry < maxRetries {
+        while currentRetry < retryLimit {
             do {
                 let (data, response) = try await session.data(for: request)
 
@@ -206,8 +208,8 @@ final class AnthropicAPIService: APIProviderProtocol {
                     let rateLimitInfo = extractRateLimitInfo(from: httpResponse)
                     let retryAfter = rateLimitInfo?.retryAfter ?? Constants.rateLimitBackoffSeconds
 
-                    if currentRetry < maxRetries - 1 {
-                        print("Rate limit hit. Waiting \(retryAfter) seconds before retry...")
+                    if currentRetry < retryLimit - 1 {
+                        AppLogger.api.warning("⏳ Rate limit hit. Waiting \(retryAfter) seconds before retry...")
                         try await Task.sleep(nanoseconds: UInt64(retryAfter * 1_000_000_000))
                         currentRetry += 1
                         continue
@@ -275,7 +277,7 @@ final class AnthropicAPIService: APIProviderProtocol {
                     }
                 }
 
-                if currentRetry < maxRetries - 1 {
+                if currentRetry < retryLimit - 1 {
                     // Exponential backoff for network errors
                     let backoffTime = TimeInterval(pow(2.0, Double(currentRetry)))
                     print("Network error. Retrying in \(backoffTime) seconds...")

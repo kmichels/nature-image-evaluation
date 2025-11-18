@@ -37,7 +37,7 @@ struct GalleryView: View {
 
     // MARK: - State
 
-    @State private var selectedImageIDs: Set<NSManagedObjectID> = []
+    @StateObject private var selectionManager = SelectionManager()
     @State private var isImporting = false
     @State private var isDragOver = false
     @State private var showingEvaluationSheet = false
@@ -125,198 +125,37 @@ struct GalleryView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar
-            HStack(spacing: 20) {
-                // Import Button
-                Button(action: { isImporting = true }) {
-                    Label("Import Images", systemImage: "photo.badge.plus")
-                }
-                .keyboardShortcut("i", modifiers: .command)
-
-                // Evaluate Button
-                Button(action: startEvaluation) {
-                    Label("Evaluate Selected", systemImage: "brain")
-                }
-                .disabled(selectedImages.isEmpty || evaluationManager.isProcessing)
-                .keyboardShortcut("e", modifiers: .command)
-
-                // Retry Failed Button
-                if failedImages.count > 0 {
-                    Button(action: retryFailedEvaluations) {
-                        Label("Retry Failed (\(failedImages.count))", systemImage: "arrow.clockwise")
-                    }
-                    .disabled(evaluationManager.isProcessing)
-                }
-
-                // Delete Selected Button
-                if !selectedImages.isEmpty {
-                    Button(action: { showingDeleteConfirmation = true }) {
-                        Label("Delete Selected", systemImage: "trash")
-                    }
-                    .foregroundColor(.red)
-                    .disabled(evaluationManager.isProcessing)
-                    .keyboardShortcut(.delete, modifiers: .command)
-                }
-
-                Divider()
-                    .frame(height: 20)
-
-                // Filter and Sort
-                Picker("Filter", selection: $filterOption) {
-                    ForEach(FilterOption.allCases, id: \.self) { option in
-                        Text(option.rawValue).tag(option)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 150)
-
-                Picker("Sort", selection: $sortOption) {
-                    ForEach(SortOption.allCases, id: \.self) { option in
-                        Text(option.rawValue).tag(option)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 150)
-
-                Spacer()
-
-                // Search
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Search images...", text: $searchText)
-                        .textFieldStyle(.plain)
-                }
-                .padding(8)
-                .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(8)
-                .frame(maxWidth: 250)
-
-                // Selection Info and Toggle
-                if !selectedImages.isEmpty {
-                    Text("\(selectedImages.count) selected")
-                        .foregroundStyle(.secondary)
-                        .font(.caption)
-
-                    Button(action: {
-                        showOnlySelected.toggle()
-                    }) {
-                        Label(showOnlySelected ? "Show All" : "Show Selected",
-                              systemImage: showOnlySelected ? "rectangle.grid.2x2" : "checkmark.rectangle.stack")
-                    }
-                    .disabled(selectedImages.isEmpty)
-                }
-            }
-            .padding()
-            .background(Color(NSColor.windowBackgroundColor))
+            GalleryViewToolbar(
+                selectionManager: selectionManager,
+                evaluationManager: evaluationManager,
+                filteredImages: filteredImages,
+                failedImages: failedImages,
+                isImporting: $isImporting,
+                filterOption: $filterOption,
+                sortOption: $sortOption,
+                searchText: $searchText,
+                showOnlySelected: $showOnlySelected,
+                showingDeleteConfirmation: $showingDeleteConfirmation,
+                onEvaluateSelected: startEvaluation,
+                onDeleteSelected: { showingDeleteConfirmation = true }
+            )
 
             Divider()
 
-            // Main Content
-            ScrollView {
-                if filteredImages.isEmpty {
-                    // Empty State - Quick Analysis
-                    VStack(spacing: 20) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.tertiary)
-
-                        Text("Quick Analysis")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-
-                        VStack(spacing: 10) {
-                            Text("Drag images here for instant evaluation")
-                                .foregroundStyle(.primary)
-                            Text("Perfect for quick tests and one-off analyses")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Button("Import Images...") {
-                            isImporting = true
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 400)
-                    .padding()
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(style: StrokeStyle(lineWidth: 2, dash: [10, 5]))
-                            .foregroundStyle(.tertiary)
-                            .opacity(isDragOver ? 1 : 0.3)
-                    )
-
-                } else {
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 20) {
-                        ForEach(filteredImages.indices, id: \.self) { index in
-                            let evaluation = filteredImages[index]
-                            let isSelected = selectedImageIDs.contains(evaluation.objectID)
-                            let isBeingEvaluated = isImageBeingEvaluated(evaluation)
-                            let isInQueue = isImageInQueue(evaluation) && !isBeingEvaluated
-
-                            ImageThumbnailView(
-                                evaluation: evaluation,
-                                isSelected: isSelected,
-                                isBeingEvaluated: isBeingEvaluated,
-                                isInQueue: isInQueue,
-                                onTap: {
-                                    toggleSelection(evaluation)
-                                },
-                                onDoubleTap: {
-                                    showDetailView(evaluation)
-                                }
-                            )
-                            .frame(minWidth: 150, idealWidth: 175, maxWidth: 200, minHeight: 180, maxHeight: 240)
-                            .id(evaluation.objectID)
-                            .contextMenu {
-                                Button(action: {
-                                    showDetailView(evaluation)
-                                }) {
-                                    Label("View Details", systemImage: "info.circle")
-                                }
-
-                                Button(action: {
-                                    selectedImageIDs = [evaluation.objectID]
-                                    startEvaluation()
-                                }) {
-                                    Label("Re-evaluate", systemImage: "brain")
-                                }
-
-                                Divider()
-
-                                Button(role: .destructive, action: {
-                                    selectedImageIDs = [evaluation.objectID]
-                                    showingDeleteConfirmation = true
-                                }) {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.top)
-                    .padding(.bottom, 40) // Extra bottom padding for scroll
-                }
-            }
-            .background(
-                ZStack {
-                    if isDragOver {
-                        Color.accentColor.opacity(0.1)
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.accentColor, lineWidth: 3)
-                            .padding(10)
-                    }
-                }
+            // Main content
+            GalleryGridContent(
+                filteredImages: filteredImages,
+                selectionManager: selectionManager,
+                evaluationManager: evaluationManager,
+                isImporting: $isImporting,
+                isDragOver: $isDragOver,
+                selectedDetailImage: $detailViewImage,
+                showingDeleteConfirmation: $showingDeleteConfirmation
             )
-            .animation(.easeInOut(duration: 0.2), value: isDragOver)
-            .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
-                return handleDrop(providers)
-            }
-
-            // Status Bar
-            if evaluationManager.isProcessing {
-                EvaluationStatusBar(manager: evaluationManager)
-            }
+        }
+        .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
+            handleDrop(providers)
+            return true
         }
         .fileImporter(
             isPresented: $isImporting,
@@ -341,16 +180,31 @@ struct GalleryView: View {
         } message: {
             Text("Are you sure you want to delete \(selectedImages.count) selected image\(selectedImages.count == 1 ? "" : "s")? This will remove the image data and all evaluation results. This action cannot be undone.")
         }
-        .onChange(of: selectedImageIDs) { _, _ in
+        .onChange(of: selectionManager.selectedIDs) { _, _ in
             // If no images selected, turn off selection filter
-            if selectedImageIDs.isEmpty && showOnlySelected {
+            if selectionManager.selectedIDs.isEmpty && showOnlySelected {
                 showOnlySelected = false
             }
+        }
+        .focusable()
+        .onKeyPress(.escape) {
+            if !selectionManager.selectedIDs.isEmpty {
+                selectionManager.deselectAll()
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(keys: [.init("a")]) { press in
+            // Check if command key is pressed
+            if press.modifiers.contains(.command) {
+                selectionManager.selectAll(ids: filteredImages.map { $0.objectID })
+                return .handled
+            }
+            return .ignored
         }
     }
 
     // MARK: - Computed Properties
-
     private var filteredImages: [ImageEvaluation] {
         let baseImages = showOnlySelected ? Array(selectedImages) : Array(imageEvaluations)
 
@@ -405,16 +259,19 @@ struct GalleryView: View {
 
     // Helper computed property to get selected images from IDs
     private var selectedImages: [ImageEvaluation] {
-        imageEvaluations.filter { selectedImageIDs.contains($0.objectID) }
+        imageEvaluations.filter { selectionManager.selectedIDs.contains($0.objectID) }
     }
 
-    private func toggleSelection(_ evaluation: ImageEvaluation) {
-        if selectedImageIDs.contains(evaluation.objectID) {
-            selectedImageIDs.remove(evaluation.objectID)
-        } else {
-            selectedImageIDs.insert(evaluation.objectID)
-        }
+    private func handleSelection(_ evaluation: ImageEvaluation, index: Int, modifiers: EventModifiers) {
+        let allIDs = filteredImages.map { $0.objectID }
+        selectionManager.handleSelection(
+            id: evaluation.objectID,
+            index: index,
+            modifiers: modifiers,
+            allIDs: allIDs
+        )
     }
+
 
     private func isImageBeingEvaluated(_ evaluation: ImageEvaluation) -> Bool {
         guard evaluationManager.isProcessing else { return false }
@@ -522,7 +379,7 @@ struct GalleryView: View {
         do {
             try viewContext.save()
             // Clear selection after deletion
-            selectedImageIDs.removeAll()
+            selectionManager.selectedIDs.removeAll()
             // Reset selection filter
             showOnlySelected = false
         } catch {
@@ -570,7 +427,8 @@ struct ImageThumbnailView: View {
     let isSelected: Bool
     var isBeingEvaluated: Bool = false
     var isInQueue: Bool = false
-    let onTap: () -> Void
+    var index: Int = 0
+    let onSelection: (EventModifiers) -> Void
     let onDoubleTap: () -> Void
 
     @State private var thumbnailImage: NSImage?
@@ -724,9 +582,29 @@ struct ImageThumbnailView: View {
         .onTapGesture(count: 2) {
             onDoubleTap()
         }
-        .onTapGesture(count: 1) {
-            onTap()
-        }
+        .simultaneousGesture(
+            TapGesture()
+                .onEnded { _ in
+                    // Get current event modifiers
+                    let modifiers = NSEvent.modifierFlags
+                    var eventModifiers = EventModifiers()
+
+                    if modifiers.contains(.command) {
+                        eventModifiers.insert(.command)
+                    }
+                    if modifiers.contains(.shift) {
+                        eventModifiers.insert(.shift)
+                    }
+                    if modifiers.contains(.option) {
+                        eventModifiers.insert(.option)
+                    }
+                    if modifiers.contains(.control) {
+                        eventModifiers.insert(.control)
+                    }
+
+                    onSelection(eventModifiers)
+                }
+        )
         .onAppear {
             loadThumbnail()
         }
