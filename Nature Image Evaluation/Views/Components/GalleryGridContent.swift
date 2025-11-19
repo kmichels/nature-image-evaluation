@@ -18,38 +18,52 @@ struct GalleryGridContent: View {
     @Binding var selectedDetailImage: ImageEvaluation?
     @Binding var showingDeleteConfirmation: Bool
 
-    let columns = [
-        GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 20)
-    ]
+    // COMMENTED OUT: Old LazyVGrid columns - replaced with NSCollectionView
+    // let columns = [
+    //     GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 20)
+    // ]
 
     var body: some View {
-        ScrollView {
-            if filteredImages.isEmpty {
+        if filteredImages.isEmpty {
+            ScrollView {
                 EmptyGalleryView(
                     isImporting: $isImporting,
                     isDragOver: isDragOver
                 )
-            } else {
-                GalleryGrid(
-                    filteredImages: filteredImages,
-                    selectionManager: selectionManager,
-                    evaluationManager: evaluationManager,
-                    selectedDetailImage: $selectedDetailImage,
-                    showingDeleteConfirmation: $showingDeleteConfirmation,
-                    columns: columns
-                )
             }
+            .background(dragOverBackground)
+        } else {
+            // NEW: Native NSCollectionView for proper macOS behavior
+            NativeImageCollectionView(
+                images: filteredImages,
+                selection: $selectionManager.selectedIDs,
+                onDoubleClick: { evaluation in
+                    selectedDetailImage = evaluation
+                },
+                evaluationManager: evaluationManager
+            )
+            .background(dragOverBackground)
+
+            // COMMENTED OUT: Old LazyVGrid implementation
+            // GalleryGrid(
+            //     filteredImages: filteredImages,
+            //     selectionManager: selectionManager,
+            //     evaluationManager: evaluationManager,
+            //     selectedDetailImage: $selectedDetailImage,
+            //     showingDeleteConfirmation: $showingDeleteConfirmation,
+            //     columns: columns
+            // )
         }
-        .background(
-            ZStack {
-                if isDragOver {
-                    Color.accentColor.opacity(0.1)
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.accentColor, lineWidth: 3)
-                        .padding()
-                }
-            }
-        )
+    }
+
+    @ViewBuilder
+    private var dragOverBackground: some View {
+        if isDragOver {
+            Color.accentColor.opacity(0.1)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.accentColor, lineWidth: 3)
+                .padding()
+        }
     }
 }
 
@@ -91,6 +105,9 @@ struct EmptyGalleryView: View {
     }
 }
 
+// COMMENTED OUT: Old LazyVGrid implementation - replaced with NSCollectionView
+// Keeping for reference during transition
+/*
 struct GalleryGrid: View {
     let filteredImages: [ImageEvaluation]
     @ObservedObject var selectionManager: SelectionManager
@@ -189,3 +206,4 @@ struct GalleryGrid: View {
         }
     }
 }
+*/

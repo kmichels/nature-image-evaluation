@@ -34,10 +34,10 @@ struct FolderGalleryView: View {
     @State private var showOnlySelected = false  // Toggle to show only selected images
     @State private var hasLoadedInitialImages = false  // Track if we've loaded images for this folder
 
-    // Grid layout
-    private let columns = [
-        GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 20)
-    ]
+    // COMMENTED OUT: Grid layout - no longer needed with NSCollectionView
+    // private let columns = [
+    //     GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 20)
+    // ]
 
     enum SortOption: String, CaseIterable {
         case name = "Name"
@@ -304,31 +304,58 @@ struct FolderGalleryView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(Array(cachedFilteredImages.enumerated()), id: \.element) { index, imageURL in
-                            FolderImageThumbnail(
-                                url: imageURL,
-                                isSelected: selectedImages.contains(imageURL),
-                                existingEvaluation: existingEvaluation(for: imageURL),
-                                thumbnail: thumbnailCache[imageURL],
-                                index: index,
-                                onSelection: { modifiers in
-                                    handleSelection(imageURL, index: index, modifiers: modifiers)
-                                },
-                                onDoubleTap: {
-                                    if let evaluation = existingEvaluation(for: imageURL) {
-                                        showDetailView(evaluation)
-                                    }
-                                },
-                                onThumbnailLoaded: { image in
-                                    thumbnailCache[imageURL] = image
-                                }
-                            )
+                // NEW: Native NSCollectionView for proper macOS behavior
+                let evaluations = Dictionary(
+                    cachedFilteredImages.compactMap { url -> (URL, ImageEvaluation)? in
+                        if let eval = existingEvaluation(for: url) {
+                            return (url, eval)
                         }
+                        return nil
+                    },
+                    uniquingKeysWith: { first, _ in first }
+                )
+
+                NativeFolderCollectionView(
+                    imageURLs: cachedFilteredImages,
+                    selection: $selectedImages,
+                    existingEvaluations: evaluations,
+                    thumbnailCache: thumbnailCache,
+                    onDoubleClick: { evaluation in
+                        if let evaluation = evaluation {
+                            showDetailView(evaluation)
+                        }
+                    },
+                    onThumbnailLoaded: { url, image in
+                        thumbnailCache[url] = image
                     }
-                    .padding()
-                }
+                )
+
+                // COMMENTED OUT: Old LazyVGrid implementation - replaced with NSCollectionView
+                // ScrollView {
+                //     LazyVGrid(columns: columns, spacing: 20) {
+                //         ForEach(Array(cachedFilteredImages.enumerated()), id: \.element) { index, imageURL in
+                //             FolderImageThumbnail(
+                //                 url: imageURL,
+                //                 isSelected: selectedImages.contains(imageURL),
+                //                 existingEvaluation: existingEvaluation(for: imageURL),
+                //                 thumbnail: thumbnailCache[imageURL],
+                //                 index: index,
+                //                 onSelection: { modifiers in
+                //                     handleSelection(imageURL, index: index, modifiers: modifiers)
+                //                 },
+                //                 onDoubleTap: {
+                //                     if let evaluation = existingEvaluation(for: imageURL) {
+                //                         showDetailView(evaluation)
+                //                     }
+                //                 },
+                //                 onThumbnailLoaded: { image in
+                //                     thumbnailCache[imageURL] = image
+                //                 }
+                //             )
+                //         }
+                //     }
+                //     .padding()
+                // }
             }
 
             // Status bar for evaluation
@@ -514,40 +541,41 @@ struct FolderGalleryView: View {
         }
     }
 
-    private func handleSelection(_ url: URL, index: Int, modifiers: EventModifiers) {
-        if modifiers.contains(.command) {
-            // CMD+click: Toggle individual selection
-            if selectedImages.contains(url) {
-                selectedImages.remove(url)
-                if lastSelectedURL == url {
-                    lastSelectedURL = nil
-                    lastSelectedIndex = nil
-                }
-            } else {
-                selectedImages.insert(url)
-                lastSelectedURL = url
-                lastSelectedIndex = index
-            }
-        } else if modifiers.contains(.shift), let lastIdx = lastSelectedIndex {
-            // SHIFT+click: Range selection
-            let minIdx = min(lastIdx, index)
-            let maxIdx = max(lastIdx, index)
-            let allURLs = cachedFilteredImages
-
-            for idx in minIdx...maxIdx {
-                if idx < allURLs.count {
-                    selectedImages.insert(allURLs[idx])
-                }
-            }
-            lastSelectedURL = url
-            lastSelectedIndex = index
-        } else {
-            // Regular click: Exclusive selection
-            selectedImages = [url]
-            lastSelectedURL = url
-            lastSelectedIndex = index
-        }
-    }
+    // COMMENTED OUT: handleSelection - NSCollectionView handles selection internally
+    // private func handleSelection(_ url: URL, index: Int, modifiers: EventModifiers) {
+    //     if modifiers.contains(.command) {
+    //         // CMD+click: Toggle individual selection
+    //         if selectedImages.contains(url) {
+    //             selectedImages.remove(url)
+    //             if lastSelectedURL == url {
+    //                 lastSelectedURL = nil
+    //                 lastSelectedIndex = nil
+    //             }
+    //         } else {
+    //             selectedImages.insert(url)
+    //             lastSelectedURL = url
+    //             lastSelectedIndex = index
+    //         }
+    //     } else if modifiers.contains(.shift), let lastIdx = lastSelectedIndex {
+    //         // SHIFT+click: Range selection
+    //         let minIdx = min(lastIdx, index)
+    //         let maxIdx = max(lastIdx, index)
+    //         let allURLs = cachedFilteredImages
+    //
+    //         for idx in minIdx...maxIdx {
+    //             if idx < allURLs.count {
+    //                 selectedImages.insert(allURLs[idx])
+    //             }
+    //         }
+    //         lastSelectedURL = url
+    //         lastSelectedIndex = index
+    //     } else {
+    //         // Regular click: Exclusive selection
+    //         selectedImages = [url]
+    //         lastSelectedURL = url
+    //         lastSelectedIndex = index
+    //     }
+    // }
 
     private func showDetailView(_ evaluation: ImageEvaluation) {
         detailViewImage = evaluation
