@@ -35,6 +35,7 @@ struct NativeImageCollectionView: NSViewRepresentable {
         collectionView.backgroundColors = [.clear]
 
         // Register our custom item class
+        // Important: For programmatically created items, we need to register the class
         collectionView.register(
             ImageCollectionViewItem.self,
             forItemWithIdentifier: NSUserInterfaceItemIdentifier("ImageCell")
@@ -176,6 +177,14 @@ class ImageCollectionViewItem: NSCollectionViewItem {
     private var scoreLabel: NSTextField!
     private var statusIndicator: NSProgressIndicator!
     private var selectionOverlay: NSView!
+
+    override init(nibName nibNameOrNil: NSNib.Name?, bundle nibBundleOrNil: Bundle?) {
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+    }
 
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 175, height: 200))

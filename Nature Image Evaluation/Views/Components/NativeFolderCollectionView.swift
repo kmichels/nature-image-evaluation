@@ -196,6 +196,14 @@ class FolderImageCollectionViewItem: NSCollectionViewItem {
     private var currentURL: URL?
     private var onThumbnailLoaded: ((URL, NSImage) -> Void)?
 
+    override init(nibName nibNameOrNil: NSNib.Name?, bundle nibBundleOrNil: Bundle?) {
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+    }
+
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 175, height: 200))
         view.wantsLayer = true
