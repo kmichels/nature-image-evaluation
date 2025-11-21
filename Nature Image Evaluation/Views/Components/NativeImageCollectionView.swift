@@ -34,12 +34,7 @@ struct NativeImageCollectionView: NSViewRepresentable {
         collectionView.allowsEmptySelection = true
         collectionView.backgroundColors = [.clear]
 
-        // Register our custom item class
-        // Important: For programmatically created items, we need to register the class
-        collectionView.register(
-            ImageCollectionViewItem.self,
-            forItemWithIdentifier: NSUserInterfaceItemIdentifier("ImageCell")
-        )
+        // Note: We don't register the item class - we'll create items directly in the data source
 
         // Configure flow layout
         let flowLayout = NSCollectionViewFlowLayout()
@@ -122,10 +117,8 @@ struct NativeImageCollectionView: NSViewRepresentable {
         }
 
         func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
-            let item = collectionView.makeItem(
-                withIdentifier: NSUserInterfaceItemIdentifier("ImageCell"),
-                for: indexPath
-            ) as! ImageCollectionViewItem
+            // Create item directly instead of using makeItem
+            let item = ImageCollectionViewItem()
 
             let image = images[indexPath.item]
             item.configure(

@@ -36,11 +36,7 @@ struct NativeFolderCollectionView: NSViewRepresentable {
         collectionView.allowsEmptySelection = true
         collectionView.backgroundColors = [.clear]
 
-        // Register our custom item class
-        collectionView.register(
-            FolderImageCollectionViewItem.self,
-            forItemWithIdentifier: NSUserInterfaceItemIdentifier("FolderImageCell")
-        )
+        // Note: We don't register the item class - we'll create items directly in the data source
 
         // Configure flow layout
         let flowLayout = NSCollectionViewFlowLayout()
@@ -132,10 +128,8 @@ struct NativeFolderCollectionView: NSViewRepresentable {
         }
 
         func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
-            let item = collectionView.makeItem(
-                withIdentifier: NSUserInterfaceItemIdentifier("FolderImageCell"),
-                for: indexPath
-            ) as! FolderImageCollectionViewItem
+            // Create item directly instead of using makeItem
+            let item = FolderImageCollectionViewItem()
 
             let url = imageURLs[indexPath.item]
             let evaluation = existingEvaluations[url]
