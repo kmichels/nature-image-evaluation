@@ -131,6 +131,9 @@ struct NativeFolderCollectionView: NSViewRepresentable {
             // Create item directly instead of using makeItem
             let item = FolderImageCollectionViewItem()
 
+            // Force loadView to be called by accessing the view
+            _ = item.view
+
             let url = imageURLs[indexPath.item]
             let evaluation = existingEvaluations[url]
             let thumbnail = thumbnailCache[url]
