@@ -56,6 +56,8 @@ struct NativeImageCollectionView: NSViewRepresentable {
         // Update data
         context.coordinator.images = images
         context.coordinator.evaluationManager = evaluationManager
+        // Clear cache when reloading to ensure fresh configuration
+        context.coordinator.itemCache.removeAll()
         collectionView.reloadData()
 
         // Update selection
@@ -116,18 +118,27 @@ struct NativeImageCollectionView: NSViewRepresentable {
             return images.count
         }
 
-        func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
-            // Create item directly instead of using makeItem
-            let item = ImageCollectionViewItem()
+        var itemCache: [IndexPath: ImageCollectionViewItem] = [:]
 
-            // Force loadView to be called by accessing the view
-            _ = item.view
+        func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
+            // Try to reuse existing item
+            let item: ImageCollectionViewItem
+            if let cachedItem = itemCache[indexPath] {
+                item = cachedItem
+            } else {
+                // Create new item if not cached
+                item = ImageCollectionViewItem()
+                // Force loadView to be called by accessing the view
+                _ = item.view
+                itemCache[indexPath] = item
+            }
 
             let image = images[indexPath.item]
             item.configure(
                 with: image,
                 evaluationManager: evaluationManager,
-                isSelected: selection.wrappedValue.contains(image.objectID)
+                isSelected: selection.wrappedValue.contains(image.objectID),
+                onDoubleClick: onDoubleClick
             )
 
             return item
@@ -173,6 +184,8 @@ class ImageCollectionViewItem: NSCollectionViewItem {
     private var scoreLabel: NSTextField!
     private var statusIndicator: NSProgressIndicator!
     private var selectionOverlay: NSView!
+    private var currentImage: ImageEvaluation?
+    private var onDoubleClickHandler: ((ImageEvaluation) -> Void)?
 
     override init(nibName nibNameOrNil: NSNib.Name?, bundle nibBundleOrNil: Bundle?) {
         super.init(nibName: nil, bundle: nil)
@@ -240,7 +253,10 @@ class ImageCollectionViewItem: NSCollectionViewItem {
         }
     }
 
-    func configure(with evaluation: ImageEvaluation, evaluationManager: EvaluationManager, isSelected: Bool) {
+    func configure(with evaluation: ImageEvaluation, evaluationManager: EvaluationManager, isSelected: Bool, onDoubleClick: ((ImageEvaluation) -> Void)? = nil) {
+        // Store references
+        self.currentImage = evaluation
+        self.onDoubleClickHandler = onDoubleClick
         // Load thumbnail
         if let thumbnailData = evaluation.thumbnailData,
            let thumbnail = NSImage(data: thumbnailData) {
@@ -291,6 +307,8 @@ class ImageCollectionViewItem: NSCollectionViewItem {
         scoreLabel.isHidden = true
         statusIndicator.stopAnimation(nil)
         selectionOverlay.isHidden = true
+        currentImage = nil
+        onDoubleClickHandler = nil
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -299,10 +317,8 @@ class ImageCollectionViewItem: NSCollectionViewItem {
 
         // Check for double-click
         if event.clickCount == 2 {
-            if let collectionView = self.collectionView,
-               let indexPath = collectionView.indexPath(for: self),
-               let coordinator = collectionView.delegate as? NativeImageCollectionView.Coordinator {
-                coordinator.collectionView(collectionView, didDoubleClickAt: indexPath)
+            if let image = currentImage, let handler = onDoubleClickHandler {
+                handler(image)
             }
         }
     }
