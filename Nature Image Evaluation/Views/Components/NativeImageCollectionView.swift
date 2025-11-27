@@ -20,21 +20,19 @@ struct NativeImageCollectionView: NSViewRepresentable {
         let scrollView = NSScrollView()
         let collectionView = NSCollectionView()
 
-        scrollView.documentView = collectionView
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
+        // Set up scroll view
         scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
         scrollView.backgroundColor = .clear
+        scrollView.drawsBackground = false
 
-        // Configure collection view
-        collectionView.delegate = context.coordinator
-        collectionView.dataSource = context.coordinator
+        // Configure collection view BEFORE setting as documentView
+        collectionView.backgroundColors = [.clear]
         collectionView.isSelectable = true
         collectionView.allowsMultipleSelection = true
         collectionView.allowsEmptySelection = true
-        collectionView.backgroundColors = [.clear]
-
-        // Note: We don't register the item class - we'll create items directly in the data source
 
         // Configure flow layout
         let flowLayout = NSCollectionViewFlowLayout()
@@ -44,8 +42,17 @@ struct NativeImageCollectionView: NSViewRepresentable {
         flowLayout.sectionInset = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         collectionView.collectionViewLayout = flowLayout
 
+        // Set delegate and data source
+        collectionView.delegate = context.coordinator
+        collectionView.dataSource = context.coordinator
+
+        // Now set as document view
+        scrollView.documentView = collectionView
+
         // Store reference for coordinator
         context.coordinator.collectionView = collectionView
+
+        print("✅ Created NSCollectionView with layout: \(flowLayout)")
 
         return scrollView
     }
@@ -60,9 +67,17 @@ struct NativeImageCollectionView: NSViewRepresentable {
         context.coordinator.evaluationManager = evaluationManager
         // Clear cache when reloading to ensure fresh configuration
         context.coordinator.itemCache.removeAll()
+
+        // Force layout invalidation before reload
+        collectionView.collectionViewLayout?.invalidateLayout()
         collectionView.reloadData()
 
+        // Force layout update
+        collectionView.needsLayout = true
+
         print("  ↳ Called reloadData on collection view")
+        print("  ↳ Collection view frame: \(collectionView.frame)")
+        print("  ↳ Scroll view frame: \(scrollView.frame)")
 
         // Update selection
         let currentSelection = collectionView.selectionIndexPaths
@@ -115,10 +130,12 @@ struct NativeImageCollectionView: NSViewRepresentable {
         // MARK: - NSCollectionViewDataSource
 
         func numberOfSections(in collectionView: NSCollectionView) -> Int {
+            print("📊 numberOfSections called - returning 1")
             return 1
         }
 
         func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int {
+            print("📊 numberOfItemsInSection called - returning \(images.count)")
             return images.count
         }
 
