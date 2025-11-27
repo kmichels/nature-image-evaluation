@@ -53,12 +53,16 @@ struct NativeImageCollectionView: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let collectionView = scrollView.documentView as? NSCollectionView else { return }
 
+        print("🔄 NativeImageCollectionView.updateNSView called with \(images.count) images")
+
         // Update data
         context.coordinator.images = images
         context.coordinator.evaluationManager = evaluationManager
         // Clear cache when reloading to ensure fresh configuration
         context.coordinator.itemCache.removeAll()
         collectionView.reloadData()
+
+        print("  ↳ Called reloadData on collection view")
 
         // Update selection
         let currentSelection = collectionView.selectionIndexPaths
@@ -121,16 +125,20 @@ struct NativeImageCollectionView: NSViewRepresentable {
         var itemCache: [IndexPath: ImageCollectionViewItem] = [:]
 
         func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
+            print("📦 Creating/reusing item for index \(indexPath.item)")
+
             // Try to reuse existing item
             let item: ImageCollectionViewItem
             if let cachedItem = itemCache[indexPath] {
                 item = cachedItem
+                print("  ↳ Reusing cached item")
             } else {
                 // Create new item if not cached
                 item = ImageCollectionViewItem()
                 // Force loadView to be called by accessing the view
                 _ = item.view
                 itemCache[indexPath] = item
+                print("  ↳ Created new item")
             }
 
             let image = images[indexPath.item]
@@ -257,6 +265,13 @@ class ImageCollectionViewItem: NSCollectionViewItem {
         // Store references
         self.currentImage = evaluation
         self.onDoubleClickHandler = onDoubleClick
+
+        print("🎯 Configuring item for image: \(evaluation.objectID)")
+        print("  - Has evaluation result: \(evaluation.currentEvaluation != nil)")
+        if let score = evaluation.currentEvaluation?.overallWeightedScore {
+            print("  - Score: \(score)")
+        }
+        print("  - Double-click handler: \(onDoubleClick != nil)")
         // Load thumbnail
         if let thumbnailData = evaluation.thumbnailData,
            let thumbnail = NSImage(data: thumbnailData) {
@@ -312,13 +327,21 @@ class ImageCollectionViewItem: NSCollectionViewItem {
     }
 
     override func mouseDown(with event: NSEvent) {
+        print("🖱 MouseDown - clickCount: \(event.clickCount)")
+        print("  - Current image: \(currentImage?.objectID.description ?? "nil")")
+        print("  - Handler present: \(onDoubleClickHandler != nil)")
+
         // Let the collection view handle selection
         super.mouseDown(with: event)
 
         // Check for double-click
         if event.clickCount == 2 {
+            print("  ✅ Double-click detected!")
             if let image = currentImage, let handler = onDoubleClickHandler {
+                print("  ↳ Calling double-click handler")
                 handler(image)
+            } else {
+                print("  ❌ Missing image or handler!")
             }
         }
     }
