@@ -46,6 +46,11 @@ struct NativeFolderCollectionView: NSViewRepresentable {
         flowLayout.sectionInset = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         collectionView.collectionViewLayout = flowLayout
 
+        // Set up double-click gesture recognizer
+        let clickGesture = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleClick(_:)))
+        clickGesture.numberOfClicksRequired = 2
+        collectionView.addGestureRecognizer(clickGesture)
+
         // Store reference for coordinator
         context.coordinator.collectionView = collectionView
 
@@ -128,8 +133,8 @@ struct NativeFolderCollectionView: NSViewRepresentable {
         }
 
         func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
-            // Create item directly instead of using makeItem
-            let item = FolderImageCollectionViewItem()
+            // Create shared item
+            let item = SharedImageCollectionViewItem()
 
             // Force loadView to be called by accessing the view
             _ = item.view
@@ -138,13 +143,55 @@ struct NativeFolderCollectionView: NSViewRepresentable {
             let evaluation = existingEvaluations[url]
             let thumbnail = thumbnailCache[url]
 
-            item.configure(
-                with: url,
-                evaluation: evaluation,
+            // Configure with shared configuration
+            let config = SharedImageCollectionViewItem.Configuration(
+                imageURL: url,
+                imageEvaluation: evaluation,
+                evaluationResult: evaluation?.currentEvaluation,
                 thumbnail: thumbnail,
-                isSelected: selection.wrappedValue.contains(url),
-                onThumbnailLoaded: onThumbnailLoaded
+                filename: url.lastPathComponent,
+                isProcessing: false,  // Folder view doesn't show processing state
+                isInQueue: false,
+                isSelected: selection.wrappedValue.contains(url)
             )
+
+            item.configure(with: config)
+
+            // Handle thumbnail loading if needed
+            if thumbnail == nil {
+                Task { @MainActor in
+                    guard let image = NSImage(contentsOf: url) else { return }
+
+                    // Create thumbnail
+                    let targetSize = NSSize(width: 175, height: 140)
+                    let thumbnailImage = NSImage(size: targetSize)
+
+                    thumbnailImage.lockFocus()
+                    image.draw(in: NSRect(origin: .zero, size: targetSize),
+                              from: NSRect(origin: .zero, size: image.size),
+                              operation: .copy,
+                              fraction: 1.0)
+                    thumbnailImage.unlockFocus()
+
+                    // Notify parent to cache the thumbnail
+                    onThumbnailLoaded(url, thumbnailImage)
+
+                    // Update the item if it's still visible
+                    if let visibleItem = collectionView.item(at: indexPath) as? SharedImageCollectionViewItem {
+                        let updatedConfig = SharedImageCollectionViewItem.Configuration(
+                            imageURL: url,
+                            imageEvaluation: evaluation,
+                            evaluationResult: evaluation?.currentEvaluation,
+                            thumbnail: thumbnailImage,
+                            filename: url.lastPathComponent,
+                            isProcessing: false,
+                            isInQueue: false,
+                            isSelected: selection.wrappedValue.contains(url)
+                        )
+                        visibleItem.configure(with: updatedConfig)
+                    }
+                }
+            }
 
             return item
         }
@@ -172,188 +219,28 @@ struct NativeFolderCollectionView: NSViewRepresentable {
             selection.wrappedValue = selectedURLs
         }
 
-        // Handle double-click
-        func collectionView(_ collectionView: NSCollectionView, didDoubleClickAt indexPath: IndexPath) {
-            if indexPath.item < imageURLs.count {
+        // Handle double-click action
+        @objc func handleDoubleClick(_ gestureRecognizer: NSClickGestureRecognizer) {
+            print("🖱 Double-click gesture triggered in NativeFolderCollectionView")
+
+            guard let collectionView = gestureRecognizer.view as? NSCollectionView else { return }
+
+            // Get the location of the click
+            let location = gestureRecognizer.location(in: collectionView)
+
+            // Find which item was double-clicked
+            if let indexPath = collectionView.indexPathForItem(at: location),
+               indexPath.item < imageURLs.count {
                 let url = imageURLs[indexPath.item]
-                onDoubleClick(existingEvaluations[url])
-            }
-        }
-    }
-}
-
-// MARK: - Custom Collection View Item for Folder Images
-
-class FolderImageCollectionViewItem: NSCollectionViewItem {
-    private var thumbnailImageView: NSImageView!
-    private var titleLabel: NSTextField!
-    private var scoreLabel: NSTextField!
-    private var statusBadge: NSTextField!
-    private var selectionOverlay: NSView!
-    private var currentURL: URL?
-    private var onThumbnailLoaded: ((URL, NSImage) -> Void)?
-
-    override init(nibName nibNameOrNil: NSNib.Name?, bundle nibBundleOrNil: Bundle?) {
-        super.init(nibName: nil, bundle: nil)
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-    }
-
-    override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 175, height: 200))
-        view.wantsLayer = true
-
-        // Thumbnail image
-        thumbnailImageView = NSImageView(frame: NSRect(x: 0, y: 40, width: 175, height: 140))
-        thumbnailImageView.imageScaling = .scaleProportionallyUpOrDown
-        thumbnailImageView.wantsLayer = true
-        thumbnailImageView.layer?.cornerRadius = 8
-        thumbnailImageView.layer?.masksToBounds = true
-        thumbnailImageView.layer?.borderWidth = 1
-        thumbnailImageView.layer?.borderColor = NSColor.separatorColor.cgColor
-        view.addSubview(thumbnailImageView)
-
-        // Title label
-        titleLabel = NSTextField(labelWithString: "")
-        titleLabel.frame = NSRect(x: 0, y: 20, width: 175, height: 20)
-        titleLabel.alignment = .center
-        titleLabel.lineBreakMode = .byTruncatingMiddle
-        titleLabel.font = .systemFont(ofSize: 11)
-        view.addSubview(titleLabel)
-
-        // Score label
-        scoreLabel = NSTextField(labelWithString: "")
-        scoreLabel.frame = NSRect(x: 0, y: 0, width: 175, height: 20)
-        scoreLabel.alignment = .center
-        scoreLabel.font = .systemFont(ofSize: 10)
-        scoreLabel.textColor = .secondaryLabelColor
-        view.addSubview(scoreLabel)
-
-        // Status badge (evaluated/not evaluated)
-        statusBadge = NSTextField(labelWithString: "")
-        statusBadge.frame = NSRect(x: 135, y: 160, width: 35, height: 15)
-        statusBadge.alignment = .center
-        statusBadge.font = .systemFont(ofSize: 9, weight: .medium)
-        statusBadge.backgroundColor = NSColor.controlAccentColor
-        statusBadge.textColor = .white
-        statusBadge.isBordered = false
-        statusBadge.wantsLayer = true
-        statusBadge.layer?.cornerRadius = 7.5
-        statusBadge.layer?.masksToBounds = true
-        statusBadge.isHidden = true
-        view.addSubview(statusBadge)
-
-        // Selection overlay
-        selectionOverlay = NSView(frame: thumbnailImageView.frame)
-        selectionOverlay.wantsLayer = true
-        selectionOverlay.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.3).cgColor
-        selectionOverlay.layer?.cornerRadius = 8
-        selectionOverlay.layer?.borderWidth = 3
-        selectionOverlay.layer?.borderColor = NSColor.controlAccentColor.cgColor
-        selectionOverlay.isHidden = true
-        view.addSubview(selectionOverlay)
-    }
-
-    override var isSelected: Bool {
-        didSet {
-            selectionOverlay.isHidden = !isSelected
-            thumbnailImageView.layer?.borderColor = isSelected ?
-                NSColor.controlAccentColor.cgColor :
-                NSColor.separatorColor.cgColor
-            thumbnailImageView.layer?.borderWidth = isSelected ? 2 : 1
-        }
-    }
-
-    func configure(with url: URL,
-                  evaluation: ImageEvaluation?,
-                  thumbnail: NSImage?,
-                  isSelected: Bool,
-                  onThumbnailLoaded: @escaping (URL, NSImage) -> Void) {
-        self.currentURL = url
-        self.onThumbnailLoaded = onThumbnailLoaded
-
-        // Set filename
-        titleLabel.stringValue = url.lastPathComponent
-
-        // Load thumbnail
-        if let thumbnail = thumbnail {
-            thumbnailImageView.image = thumbnail
-        } else {
-            // Load thumbnail asynchronously
-            loadThumbnail(for: url)
-        }
-
-        // Show evaluation status
-        if let eval = evaluation {
-            if let score = eval.currentEvaluation?.overallWeightedScore {
-                scoreLabel.stringValue = String(format: "Score: %.1f", score)
-                scoreLabel.isHidden = false
-                statusBadge.stringValue = "✓"
-                statusBadge.backgroundColor = NSColor.systemGreen
+                let evaluation = existingEvaluations[url]
+                print("  ✅ Double-click detected on image at index \(indexPath.item)")
+                print("  ↳ URL: \(url.lastPathComponent)")
+                print("  ↳ Has evaluation: \(evaluation != nil)")
+                onDoubleClick(evaluation)
             } else {
-                scoreLabel.isHidden = true
-                statusBadge.stringValue = "!"
-                statusBadge.backgroundColor = NSColor.systemOrange
-            }
-            statusBadge.isHidden = false
-        } else {
-            scoreLabel.isHidden = true
-            statusBadge.isHidden = true
-        }
-
-        // Update selection state
-        self.isSelected = isSelected
-    }
-
-    private func loadThumbnail(for url: URL) {
-        Task { @MainActor in
-            guard let image = NSImage(contentsOf: url) else { return }
-
-            // Create thumbnail
-            let targetSize = NSSize(width: 175, height: 140)
-            let thumbnail = NSImage(size: targetSize)
-
-            thumbnail.lockFocus()
-            image.draw(in: NSRect(origin: .zero, size: targetSize),
-                      from: NSRect(origin: .zero, size: image.size),
-                      operation: .copy,
-                      fraction: 1.0)
-            thumbnail.unlockFocus()
-
-            thumbnailImageView.image = thumbnail
-
-            // Notify parent to cache the thumbnail
-            if let currentURL = self.currentURL {
-                onThumbnailLoaded?(currentURL, thumbnail)
-            }
-        }
-    }
-
-    override func prepareForReuse() {
-        super.prepareForReuse()
-        thumbnailImageView.image = nil
-        titleLabel.stringValue = ""
-        scoreLabel.stringValue = ""
-        scoreLabel.isHidden = true
-        statusBadge.isHidden = true
-        selectionOverlay.isHidden = true
-        currentURL = nil
-        onThumbnailLoaded = nil
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        // Let the collection view handle selection
-        super.mouseDown(with: event)
-
-        // Check for double-click
-        if event.clickCount == 2 {
-            if let collectionView = self.collectionView,
-               let indexPath = collectionView.indexPath(for: self),
-               let coordinator = collectionView.delegate as? NativeFolderCollectionView.Coordinator {
-                coordinator.collectionView(collectionView, didDoubleClickAt: indexPath)
+                print("  ❌ No item found at click location")
             }
         }
     }
 }
+

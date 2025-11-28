@@ -20,19 +20,27 @@ struct NativeImageCollectionView: NSViewRepresentable {
         let scrollView = NSScrollView()
         let collectionView = NSCollectionView()
 
-        // Set up scroll view
+        // Set up scroll view with autoresizing to fill SwiftUI container
         scrollView.borderType = .noBorder
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.backgroundColor = .clear
         scrollView.drawsBackground = false
+        scrollView.autoresizingMask = [.width, .height]
+
+        // Give it an initial frame (will be resized by SwiftUI)
+        scrollView.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
 
         // Configure collection view BEFORE setting as documentView
         collectionView.backgroundColors = [.clear]
         collectionView.isSelectable = true
         collectionView.allowsMultipleSelection = true
         collectionView.allowsEmptySelection = true
+        collectionView.autoresizingMask = [.width, .height]
+
+        // Set initial frame for collection view
+        collectionView.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
 
         // Configure flow layout
         let flowLayout = NSCollectionViewFlowLayout()
@@ -46,6 +54,11 @@ struct NativeImageCollectionView: NSViewRepresentable {
         collectionView.delegate = context.coordinator
         collectionView.dataSource = context.coordinator
 
+        // Set up double-click gesture recognizer
+        let clickGesture = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleClick(_:)))
+        clickGesture.numberOfClicksRequired = 2
+        collectionView.addGestureRecognizer(clickGesture)
+
         // Now set as document view
         scrollView.documentView = collectionView
 
@@ -53,6 +66,8 @@ struct NativeImageCollectionView: NSViewRepresentable {
         context.coordinator.collectionView = collectionView
 
         print("✅ Created NSCollectionView with layout: \(flowLayout)")
+        print("  ↳ Initial scroll view frame: \(scrollView.frame)")
+        print("  ↳ Initial collection view frame: \(collectionView.frame)")
 
         return scrollView
     }
@@ -62,11 +77,27 @@ struct NativeImageCollectionView: NSViewRepresentable {
 
         print("🔄 NativeImageCollectionView.updateNSView called with \(images.count) images")
 
+        // Check if we have a valid frame from SwiftUI
+        if let superview = scrollView.superview, superview.frame.size != .zero {
+            // Update frame to match superview if needed
+            if scrollView.frame.size != superview.frame.size {
+                print("  📐 Updating frame to match superview: \(superview.frame.size)")
+                scrollView.frame = superview.bounds
+                collectionView.frame = NSRect(origin: .zero, size: superview.frame.size)
+            }
+        } else if scrollView.frame.size == .zero {
+            print("  ⚠️ ScrollView has zero frame, waiting for layout...")
+            // If we still have zero frame, SwiftUI hasn't laid us out yet
+            // Schedule an update for the next run loop
+            DispatchQueue.main.async {
+                scrollView.needsLayout = true
+                collectionView.needsLayout = true
+            }
+        }
+
         // Update data
         context.coordinator.images = images
         context.coordinator.evaluationManager = evaluationManager
-        // Clear cache when reloading to ensure fresh configuration
-        context.coordinator.itemCache.removeAll()
 
         // Force layout invalidation before reload
         collectionView.collectionViewLayout?.invalidateLayout()
@@ -78,6 +109,7 @@ struct NativeImageCollectionView: NSViewRepresentable {
         print("  ↳ Called reloadData on collection view")
         print("  ↳ Collection view frame: \(collectionView.frame)")
         print("  ↳ Scroll view frame: \(scrollView.frame)")
+        print("  ↳ Superview frame: \(scrollView.superview?.frame ?? .zero)")
 
         // Update selection
         let currentSelection = collectionView.selectionIndexPaths
@@ -139,32 +171,60 @@ struct NativeImageCollectionView: NSViewRepresentable {
             return images.count
         }
 
-        var itemCache: [IndexPath: ImageCollectionViewItem] = [:]
-
         func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
             print("📦 Creating/reusing item for index \(indexPath.item)")
 
-            // Try to reuse existing item
-            let item: ImageCollectionViewItem
-            if let cachedItem = itemCache[indexPath] {
-                item = cachedItem
-                print("  ↳ Reusing cached item")
-            } else {
-                // Create new item if not cached
-                item = ImageCollectionViewItem()
-                // Force loadView to be called by accessing the view
-                _ = item.view
-                itemCache[indexPath] = item
-                print("  ↳ Created new item")
-            }
+            // Create new shared item
+            let item = SharedImageCollectionViewItem()
+            // Force loadView to be called by accessing the view
+            _ = item.view
 
             let image = images[indexPath.item]
-            item.configure(
-                with: image,
-                evaluationManager: evaluationManager,
-                isSelected: selection.wrappedValue.contains(image.objectID),
-                onDoubleClick: onDoubleClick
+
+            // Get filename
+            var filename = "Unknown"
+            if let bookmarkData = image.originalFilePath {
+                do {
+                    var isStale = false
+                    let url = try URL(resolvingBookmarkData: bookmarkData, bookmarkDataIsStale: &isStale)
+                    filename = url.lastPathComponent
+                } catch {
+                    // Use fallback
+                }
+            }
+
+            // Get thumbnail
+            var thumbnail: NSImage?
+            if let thumbnailData = image.thumbnailData {
+                thumbnail = NSImage(data: thumbnailData)
+            }
+
+            // Check if being evaluated
+            let isProcessing = evaluationManager.evaluationQueue.contains(image) &&
+                              evaluationManager.isProcessing &&
+                              evaluationManager.evaluationQueue.firstIndex(of: image) == evaluationManager.currentImageIndex - 1
+
+            let isInQueue = evaluationManager.evaluationQueue.contains(image) && !isProcessing
+
+            // Configure with shared configuration
+            let config = SharedImageCollectionViewItem.Configuration(
+                imageURL: nil,  // Not used for Quick Analysis
+                imageEvaluation: image,
+                evaluationResult: image.currentEvaluation,
+                thumbnail: thumbnail,
+                filename: filename,
+                isProcessing: isProcessing,
+                isInQueue: isInQueue,
+                isSelected: selection.wrappedValue.contains(image.objectID)
             )
+
+            item.configure(with: config)
+
+            print("🎯 Configuring item for image: \(image.objectID)")
+            print("  - Has evaluation result: \(image.currentEvaluation != nil)")
+            if let score = image.currentEvaluation?.overallWeightedScore {
+                print("  - Score: \(score)")
+            }
 
             return item
         }
@@ -177,6 +237,27 @@ struct NativeImageCollectionView: NSViewRepresentable {
 
         func collectionView(_ collectionView: NSCollectionView, didDeselectItemsAt indexPaths: Set<IndexPath>) {
             updateSelection(from: collectionView)
+        }
+
+        // Handle double-click action
+        @objc func handleDoubleClick(_ gestureRecognizer: NSClickGestureRecognizer) {
+            print("🖱 Double-click gesture triggered in NativeImageCollectionView")
+
+            guard let collectionView = gestureRecognizer.view as? NSCollectionView else { return }
+
+            // Get the location of the click
+            let location = gestureRecognizer.location(in: collectionView)
+
+            // Find which item was double-clicked
+            if let indexPath = collectionView.indexPathForItem(at: location),
+               indexPath.item < images.count {
+                let image = images[indexPath.item]
+                print("  ✅ Double-click detected on image at index \(indexPath.item)")
+                print("  ↳ Opening detail view for image: \(image.objectID)")
+                onDoubleClick(image)
+            } else {
+                print("  ❌ No item found at click location")
+            }
         }
 
         private func updateSelection(from collectionView: NSCollectionView) {
@@ -192,174 +273,5 @@ struct NativeImageCollectionView: NSViewRepresentable {
             selection.wrappedValue = selectedIDs
         }
 
-        // Handle double-click
-        func collectionView(_ collectionView: NSCollectionView, didDoubleClickAt indexPath: IndexPath) {
-            if indexPath.item < images.count {
-                onDoubleClick(images[indexPath.item])
-            }
-        }
-    }
-}
-
-// MARK: - Custom Collection View Item
-
-class ImageCollectionViewItem: NSCollectionViewItem {
-    private var thumbnailImageView: NSImageView!
-    private var titleLabel: NSTextField!
-    private var scoreLabel: NSTextField!
-    private var statusIndicator: NSProgressIndicator!
-    private var selectionOverlay: NSView!
-    private var currentImage: ImageEvaluation?
-    private var onDoubleClickHandler: ((ImageEvaluation) -> Void)?
-
-    override init(nibName nibNameOrNil: NSNib.Name?, bundle nibBundleOrNil: Bundle?) {
-        super.init(nibName: nil, bundle: nil)
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-    }
-
-    override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 175, height: 200))
-        view.wantsLayer = true
-
-        // Thumbnail image
-        thumbnailImageView = NSImageView(frame: NSRect(x: 0, y: 40, width: 175, height: 140))
-        thumbnailImageView.imageScaling = .scaleProportionallyUpOrDown
-        thumbnailImageView.wantsLayer = true
-        thumbnailImageView.layer?.cornerRadius = 8
-        thumbnailImageView.layer?.masksToBounds = true
-        thumbnailImageView.layer?.borderWidth = 1
-        thumbnailImageView.layer?.borderColor = NSColor.separatorColor.cgColor
-        view.addSubview(thumbnailImageView)
-
-        // Title label
-        titleLabel = NSTextField(labelWithString: "")
-        titleLabel.frame = NSRect(x: 0, y: 20, width: 175, height: 20)
-        titleLabel.alignment = .center
-        titleLabel.lineBreakMode = .byTruncatingMiddle
-        titleLabel.font = .systemFont(ofSize: 11)
-        view.addSubview(titleLabel)
-
-        // Score label
-        scoreLabel = NSTextField(labelWithString: "")
-        scoreLabel.frame = NSRect(x: 0, y: 0, width: 175, height: 20)
-        scoreLabel.alignment = .center
-        scoreLabel.font = .systemFont(ofSize: 10)
-        scoreLabel.textColor = .secondaryLabelColor
-        view.addSubview(scoreLabel)
-
-        // Status indicator (for processing)
-        statusIndicator = NSProgressIndicator(frame: NSRect(x: 77, y: 100, width: 20, height: 20))
-        statusIndicator.style = .spinning
-        statusIndicator.isDisplayedWhenStopped = false
-        statusIndicator.controlSize = .small
-        view.addSubview(statusIndicator)
-
-        // Selection overlay
-        selectionOverlay = NSView(frame: thumbnailImageView.frame)
-        selectionOverlay.wantsLayer = true
-        selectionOverlay.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.3).cgColor
-        selectionOverlay.layer?.cornerRadius = 8
-        selectionOverlay.layer?.borderWidth = 3
-        selectionOverlay.layer?.borderColor = NSColor.controlAccentColor.cgColor
-        selectionOverlay.isHidden = true
-        view.addSubview(selectionOverlay)
-    }
-
-    override var isSelected: Bool {
-        didSet {
-            selectionOverlay.isHidden = !isSelected
-            thumbnailImageView.layer?.borderColor = isSelected ?
-                NSColor.controlAccentColor.cgColor :
-                NSColor.separatorColor.cgColor
-            thumbnailImageView.layer?.borderWidth = isSelected ? 2 : 1
-        }
-    }
-
-    func configure(with evaluation: ImageEvaluation, evaluationManager: EvaluationManager, isSelected: Bool, onDoubleClick: ((ImageEvaluation) -> Void)? = nil) {
-        // Store references
-        self.currentImage = evaluation
-        self.onDoubleClickHandler = onDoubleClick
-
-        print("🎯 Configuring item for image: \(evaluation.objectID)")
-        print("  - Has evaluation result: \(evaluation.currentEvaluation != nil)")
-        if let score = evaluation.currentEvaluation?.overallWeightedScore {
-            print("  - Score: \(score)")
-        }
-        print("  - Double-click handler: \(onDoubleClick != nil)")
-        // Load thumbnail
-        if let thumbnailData = evaluation.thumbnailData,
-           let thumbnail = NSImage(data: thumbnailData) {
-            thumbnailImageView.image = thumbnail
-        } else {
-            thumbnailImageView.image = NSImage(systemSymbolName: "photo", accessibilityDescription: nil)
-        }
-
-        // Set filename
-        var filename = "Unknown"
-        if let bookmarkData = evaluation.originalFilePath {
-            do {
-                var isStale = false
-                let url = try URL(resolvingBookmarkData: bookmarkData, bookmarkDataIsStale: &isStale)
-                filename = url.lastPathComponent
-            } catch {
-                // Use fallback
-            }
-        }
-        titleLabel.stringValue = filename
-
-        // Set score if available
-        if let score = evaluation.currentEvaluation?.overallWeightedScore {
-            scoreLabel.stringValue = String(format: "Score: %.1f", score)
-            scoreLabel.isHidden = false
-        } else {
-            scoreLabel.isHidden = true
-        }
-
-        // Check if being evaluated
-        let isProcessing = evaluationManager.evaluationQueue.contains(evaluation) &&
-                          evaluationManager.isProcessing
-        if isProcessing {
-            statusIndicator.startAnimation(nil)
-        } else {
-            statusIndicator.stopAnimation(nil)
-        }
-
-        // Update selection state
-        self.isSelected = isSelected
-    }
-
-    override func prepareForReuse() {
-        super.prepareForReuse()
-        thumbnailImageView.image = nil
-        titleLabel.stringValue = ""
-        scoreLabel.stringValue = ""
-        scoreLabel.isHidden = true
-        statusIndicator.stopAnimation(nil)
-        selectionOverlay.isHidden = true
-        currentImage = nil
-        onDoubleClickHandler = nil
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        print("🖱 MouseDown - clickCount: \(event.clickCount)")
-        print("  - Current image: \(currentImage?.objectID.description ?? "nil")")
-        print("  - Handler present: \(onDoubleClickHandler != nil)")
-
-        // Let the collection view handle selection
-        super.mouseDown(with: event)
-
-        // Check for double-click
-        if event.clickCount == 2 {
-            print("  ✅ Double-click detected!")
-            if let image = currentImage, let handler = onDoubleClickHandler {
-                print("  ↳ Calling double-click handler")
-                handler(image)
-            } else {
-                print("  ❌ Missing image or handler!")
-            }
-        }
     }
 }

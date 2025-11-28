@@ -142,7 +142,7 @@ struct GalleryView: View {
 
             Divider()
 
-            // Main content
+            // Main content - use frame to fill available space
             GalleryGridContent(
                 filteredImages: filteredImages,
                 selectionManager: selectionManager,
@@ -152,6 +152,7 @@ struct GalleryView: View {
                 selectedDetailImage: $detailViewImage,
                 showingDeleteConfirmation: $showingDeleteConfirmation
             )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
             handleDrop(providers)

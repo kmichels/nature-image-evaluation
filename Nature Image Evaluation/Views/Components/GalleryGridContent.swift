@@ -34,15 +34,18 @@ struct GalleryGridContent: View {
             .background(dragOverBackground)
         } else {
             // NEW: Native NSCollectionView for proper macOS behavior
-            NativeImageCollectionView(
-                images: filteredImages,
-                selection: $selectionManager.selectedIDs,
-                onDoubleClick: { evaluation in
-                    selectedDetailImage = evaluation
-                },
-                evaluationManager: evaluationManager
-            )
-            .background(dragOverBackground)
+            GeometryReader { geometry in
+                NativeImageCollectionView(
+                    images: filteredImages,
+                    selection: $selectionManager.selectedIDs,
+                    onDoubleClick: { evaluation in
+                        selectedDetailImage = evaluation
+                    },
+                    evaluationManager: evaluationManager
+                )
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .background(dragOverBackground)
+            }
 
             // COMMENTED OUT: Old LazyVGrid implementation
             // GalleryGrid(
