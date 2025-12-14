@@ -13,11 +13,12 @@ struct Constants {
 
     /// Anthropic API
     static let anthropicAPIURL = "https://api.anthropic.com/v1/messages"
-    static let anthropicDefaultModel = "claude-opus-4-1"
+    static let anthropicDefaultModel = "claude-opus-4-5-20251101"
 
     /// Available Anthropic Models (2025)
     static let anthropicModels = [
-        AnthropicModel(id: "claude-opus-4-1", name: "Claude Opus 4.1", description: "Best for complex reasoning & artistic evaluation", inputCost: 15.0, outputCost: 75.0),
+        AnthropicModel(id: "claude-opus-4-5-20251101", name: "Claude Opus 4.5", description: "Latest & best for coding, agents & complex reasoning", inputCost: 5.0, outputCost: 25.0),
+        AnthropicModel(id: "claude-opus-4-1", name: "Claude Opus 4.1", description: "Previous best for complex reasoning", inputCost: 15.0, outputCost: 75.0),
         AnthropicModel(id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", description: "Balanced performance & cost", inputCost: 3.0, outputCost: 15.0),
         AnthropicModel(id: "claude-haiku-4-5", name: "Claude Haiku 4.5", description: "Fast & cheaper option", inputCost: 1.0, outputCost: 5.0),
         AnthropicModel(id: "claude-haiku-3-5", name: "Claude Haiku 3.5", description: "Most economical choice", inputCost: 0.25, outputCost: 1.25)

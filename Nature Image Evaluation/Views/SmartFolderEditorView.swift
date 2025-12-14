@@ -10,7 +10,7 @@ import CoreData
 
 struct SmartFolderEditorView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var smartFolderManager = SmartFolderManager.shared
+    @State private var smartFolderManager = SmartFolderManager.shared
 
     let existingFolder: Collection?
     @State private var folderName: String = ""

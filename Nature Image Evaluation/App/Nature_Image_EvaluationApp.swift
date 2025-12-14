@@ -11,18 +11,21 @@ import CoreData
 @main
 struct Nature_Image_EvaluationApp: App {
     let persistenceController = PersistenceController.shared
+    @State private var evaluationManager: EvaluationManager
 
     init() {
-        // Migration disabled for fresh programmatic model
-        // DataMigrationHelper.shared.runFullMigration(
-        //     context: persistenceController.container.viewContext
-        // )
+        // Initialize evaluation manager
+        _evaluationManager = State(initialValue: EvaluationManager(persistenceController: PersistenceController.shared))
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentViewNew()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                .environment(evaluationManager)
+                .frame(minWidth: 900, minHeight: 600)
         }
+        .windowStyle(.titleBar)
+        .windowToolbarStyle(.unified)
     }
 }

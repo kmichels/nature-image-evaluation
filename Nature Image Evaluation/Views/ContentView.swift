@@ -20,7 +20,7 @@ struct ContentView: View {
     @State private var showingSettings = false
     @State private var selectedSidebarItem: SidebarItem?
     @State private var folderManager = FolderManager.shared
-    @StateObject private var smartFolderManager = SmartFolderManager.shared
+    @State private var smartFolderManager = SmartFolderManager.shared
     @State private var showingFolderPicker = false
     @State private var showingSmartFolderCreator = false
 
@@ -29,6 +29,7 @@ struct ContentView: View {
         case folder(MonitoredFolder)
         case smartFolder(Collection)
         case settings
+        case newBrowser // Test the new browser
 
         // Helper for saving/loading selection
         var storageKey: String {
@@ -41,6 +42,8 @@ struct ContentView: View {
                 return "smartFolder:\(smartFolder.id?.uuidString ?? "")"
             case .settings:
                 return "settings"
+            case .newBrowser:
+                return "newBrowser"
             }
         }
     }
@@ -113,6 +116,13 @@ struct ContentView: View {
                         Label("Settings", systemImage: "gear")
                     }
                 }
+
+                // Development/Test Section
+                Section("Development") {
+                    NavigationLink(value: SidebarItem.newBrowser) {
+                        Label("New Browser (Test)", systemImage: "square.grid.3x3.fill")
+                    }
+                }
             }
             .navigationTitle("Nature Image Evaluation")
             .listStyle(SidebarListStyle())
@@ -136,6 +146,10 @@ struct ContentView: View {
 
                 case .settings:
                     SettingsView()
+                        .environment(\.managedObjectContext, viewContext)
+
+                case .newBrowser:
+                    ImageBrowserView2()
                         .environment(\.managedObjectContext, viewContext)
                 }
             }
@@ -207,6 +221,8 @@ struct ContentView: View {
             selectedSidebarItem = .quickAnalysis
         } else if savedKey == "settings" {
             selectedSidebarItem = .settings
+        } else if savedKey == "newBrowser" {
+            selectedSidebarItem = .newBrowser
         } else if savedKey.hasPrefix("folder:") {
             // Extract the folder ID
             let folderIDString = String(savedKey.dropFirst(7))

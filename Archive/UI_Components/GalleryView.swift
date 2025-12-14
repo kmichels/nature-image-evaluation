@@ -37,7 +37,7 @@ struct GalleryView: View {
 
     // MARK: - State
 
-    @State private var selectionManager = SelectionManager()
+    @StateObject private var selectionManager = SelectionManager()
     @State private var isImporting = false
     @State private var isDragOver = false
     @State private var showingEvaluationSheet = false
@@ -155,7 +155,7 @@ struct GalleryView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
-            _ = handleDrop(providers)
+            handleDrop(providers)
             return true
         }
         .fileImporter(

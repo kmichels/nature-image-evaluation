@@ -315,7 +315,7 @@ struct NativeFolderCollectionView: NSViewRepresentable {
             scrollView.reflectScrolledClipView(scrollView.contentView)
 
             // Keep forcing the scroll position for a bit
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) { [weak self] in
                 scrollView.contentView.scroll(to: scrollBefore)
                 scrollView.reflectScrolledClipView(scrollView.contentView)
             }

@@ -12,7 +12,7 @@ struct SmartFolderGalleryView: View {
     let smartFolder: Collection
     @Environment(\.managedObjectContext) private var viewContext
     @State private var evaluationManager = EvaluationManager()
-    @StateObject private var smartFolderManager = SmartFolderManager.shared
+    @State private var smartFolderManager = SmartFolderManager.shared
 
     @State private var images: [ImageEvaluation] = []
     @State private var selectedImages = Set<ImageEvaluation>()
