@@ -31,16 +31,14 @@ struct ImageBrowserView2: View {
     }
 
     var body: some View {
-        HSplitView {
-            // Sidebar
-            sidebarContent
-                .frame(minWidth: 220, idealWidth: 260, maxWidth: 300)
-
-            // Main content
+        ZStack(alignment: .topLeading) {
+            // Full-bleed content underneath
             mainContent
-                .frame(minWidth: 600)
+
+            // Sidebar container extends to top (for traffic lights), glass panel is inset
+            sidebarContainer
+                .ignoresSafeArea()
         }
-        .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             viewModel.viewMode = BrowserViewModel.ViewMode(rawValue: savedViewMode) ?? .grid
             loadSavedFolder()
@@ -75,188 +73,229 @@ struct ImageBrowserView2: View {
         }
     }
 
-    // MARK: - Sidebar
+    // MARK: - Sidebar Container (extends to top for traffic lights)
+
+    private let sidebarWidth: CGFloat = 220
+    private let sidebarInset: CGFloat = 6 // Gap around the glass panel
+    private let toolbarAreaHeight: CGFloat = 44 // Height for toolbar/traffic light area
 
     @ViewBuilder
-    private var sidebarContent: some View {
+    private var sidebarContainer: some View {
+        // Clear container that extends to window edges - traffic lights float here
         VStack(spacing: 0) {
-            // Header with better styling
+            // The actual glass panel with rounded corners, inset from edges
+            sidebarGlassPanel
+                .padding(.top, sidebarInset)
+                .padding(.leading, sidebarInset)
+                .padding(.bottom, sidebarInset)
+        }
+        .frame(width: sidebarWidth + sidebarInset) // Width includes left padding
+        .frame(maxHeight: .infinity)
+    }
+
+    // MARK: - Sidebar Glass Panel (the visible rounded panel)
+
+    @ViewBuilder
+    private var sidebarGlassPanel: some View {
+        VStack(spacing: 0) {
+            // Header - with top padding for traffic lights area
             HStack {
-                Label("Image Browser", systemImage: "photo.on.rectangle")
-                    .font(.headline)
+                Label("Library", systemImage: "photo.on.rectangle")
+                    .font(.system(.headline, design: .rounded))
                     .foregroundColor(.primary)
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color(NSColor.controlBackgroundColor))
+            .padding(.horizontal, 14)
+            .padding(.top, 36) // Space for traffic lights
+            .padding(.bottom, 8)
 
             Divider()
+                .padding(.horizontal, 8)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     // Current Folder Section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Current Folder")
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Location")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .textCase(.uppercase)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, 12)
 
                         if let folder = selectedFolder {
-                            HStack {
+                            HStack(spacing: 8) {
                                 Image(systemName: "folder.fill")
                                     .foregroundColor(.accentColor)
-                                VStack(alignment: .leading, spacing: 2) {
+                                    .font(.system(size: 16))
+                                VStack(alignment: .leading, spacing: 1) {
                                     Text(folder.lastPathComponent)
                                         .lineLimit(1)
-                                        .font(.system(.body, design: .rounded))
+                                        .font(.system(.callout, design: .rounded, weight: .medium))
                                     Text("\(viewModel.displayedURLs.count) images")
-                                        .font(.caption)
+                                        .font(.caption2)
                                         .foregroundColor(.secondary)
                                 }
                                 Spacer()
                             }
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, 10)
                             .padding(.vertical, 8)
-                            .background(Color.accentColor.opacity(0.1))
-                            .cornerRadius(6)
-                            .padding(.horizontal, 12)
+                            .background(.white.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .padding(.horizontal, 8)
                         } else {
                             Button(action: { folderPickerPresented = true }) {
                                 HStack {
                                     Image(systemName: "folder.badge.plus")
+                                        .font(.system(size: 16))
                                     Text("Select Folder")
+                                        .font(.callout)
                                     Spacer()
                                 }
-                                .padding(.horizontal, 16)
+                                .padding(.horizontal, 10)
                                 .padding(.vertical, 8)
                             }
                             .buttonStyle(.plain)
-                            .background(Color(NSColor.controlBackgroundColor))
-                            .cornerRadius(6)
-                            .padding(.horizontal, 12)
+                            .background(.white.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .padding(.horizontal, 8)
                         }
                     }
 
                     // Quick Actions
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Quick Actions")
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Actions")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .textCase(.uppercase)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, 12)
 
-                        VStack(spacing: 4) {
+                        VStack(spacing: 2) {
                             Button(action: { folderPickerPresented = true }) {
                                 Label("Change Folder", systemImage: "folder")
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .buttonStyle(SidebarButtonStyle())
+                            .buttonStyle(GlassButtonStyle())
 
                             if !viewModel.selectedURLs.isEmpty {
                                 Button(action: { viewModel.deselectAll() }) {
                                     Label("Clear Selection", systemImage: "xmark.circle")
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                                .buttonStyle(SidebarButtonStyle())
+                                .buttonStyle(GlassButtonStyle())
                             }
                         }
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 8)
                     }
                 }
                 .padding(.vertical, 8)
             }
 
-            Divider()
-
-            // Selection info
+            // Selection info at bottom
             if !viewModel.selectedURLs.isEmpty {
+                Divider()
+                    .padding(.horizontal, 8)
+
                 HStack {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.accentColor)
+                        .font(.system(size: 14))
                     Text("\(viewModel.selectedURLs.count) selected")
                         .font(.caption)
+                        .foregroundColor(.secondary)
                     Spacer()
                 }
-                .padding(12)
-                .background(Color(NSColor.controlBackgroundColor))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
             }
         }
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .frame(width: sidebarWidth)
+        .frame(maxHeight: .infinity)
+        .background(.thinMaterial) // Slightly more opaque for better visibility
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 2)
     }
 
     // MARK: - Main Content
 
     @ViewBuilder
     private var mainContent: some View {
-        VStack(spacing: 0) {
-            // Modern toolbar
-            toolbarView
+        ZStack(alignment: .top) {
+            // Full-bleed content area
+            Color(NSColor.textBackgroundColor)
+                .ignoresSafeArea()
 
-            // Content area with better background
-            ZStack {
-                // Background
-                Color(NSColor.textBackgroundColor)
+            // Image grid/list/columns based on view mode
+            // Sidebar container width = sidebarWidth + sidebarInset, plus gap
+            let contentLeadingPadding = sidebarWidth + sidebarInset + 6
 
-                // Image grid/list/columns based on view mode
-                Group {
-                    switch viewModel.viewMode {
-                    case .grid:
-                        ImageGridView2(viewModel: viewModel)
-                    case .list:
-                        ImageListView(viewModel: viewModel)
-                    case .columns:
-                        // Placeholder for column view
-                        VStack {
-                            Spacer()
-                            Image(systemName: "rectangle.split.3x1")
-                                .font(.system(size: 48))
-                                .foregroundColor(Color(NSColor.tertiaryLabelColor))
-                            Text("Column view coming soon")
-                                .foregroundColor(.secondary)
-                                .padding(.top)
-                            Spacer()
-                        }
+            Group {
+                switch viewModel.viewMode {
+                case .grid:
+                    ImageGridView2(viewModel: viewModel, sidebarWidth: contentLeadingPadding)
+                case .list:
+                    ImageListView(viewModel: viewModel)
+                        .padding(.leading, contentLeadingPadding)
+                        .padding(.top, toolbarAreaHeight)
+                case .columns:
+                    // Placeholder for column view
+                    VStack {
+                        Spacer()
+                        Image(systemName: "rectangle.split.3x1")
+                            .font(.system(size: 48))
+                            .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                        Text("Column view coming soon")
+                            .foregroundColor(.secondary)
+                            .padding(.top)
+                        Spacer()
                     }
+                    .padding(.leading, contentLeadingPadding)
                 }
             }
+
+            // Floating toolbar at top-right (close to window edge)
+            floatingToolbar
+                .padding(.top, 4)
+                .padding(.trailing, 8)
+                .padding(.leading, contentLeadingPadding)
         }
     }
 
+    // MARK: - Floating Toolbar (Liquid Glass style)
+
     @ViewBuilder
-    private var toolbarView: some View {
-        HStack(spacing: 16) {
-            // Image count
+    private var floatingToolbar: some View {
+        HStack(spacing: 12) {
+            // Image count pill
             HStack(spacing: 4) {
                 Image(systemName: "photo.stack")
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 11))
                 Text("\(viewModel.displayedURLs.count)")
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.medium)
-                Text("images")
-                    .foregroundColor(.secondary)
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
             }
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
 
+            // Selection count pill (if any selected)
             if !viewModel.selectedURLs.isEmpty {
-                Divider()
-                    .frame(height: 16)
-
                 HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle")
-                        .foregroundColor(.accentColor)
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 11))
                     Text("\(viewModel.selectedURLs.count)")
-                        .font(.system(.body, design: .rounded))
-                        .fontWeight(.medium)
-                        .foregroundColor(.accentColor)
-                    Text("selected")
-                        .foregroundColor(.secondary)
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
                 }
+                .foregroundColor(.accentColor)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
             }
 
             Spacer()
 
-            // Sort menu
+            // Sort menu pill
             Menu {
                 ForEach(BrowserViewModel.SortOrder.allCases, id: \.self) { order in
                     Button(action: {
@@ -272,82 +311,97 @@ struct ImageBrowserView2: View {
                     }
                 }
             } label: {
-                Label("Sort", systemImage: "arrow.up.arrow.down")
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.system(size: 11))
+                    Text("Sort")
+                        .font(.system(.caption, design: .rounded, weight: .medium))
+                }
+                .foregroundColor(.primary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
             }
             .menuStyle(.borderlessButton)
-            .fixedSize()
 
-            Divider()
-                .frame(height: 16)
-
-            // View mode selector with icons
-            HStack(spacing: 2) {
+            // View mode selector pill
+            HStack(spacing: 0) {
                 ForEach(BrowserViewModel.ViewMode.allCases, id: \.self) { mode in
                     Button(action: {
                         viewModel.viewMode = mode
                         savedViewMode = mode.rawValue
                     }) {
                         Image(systemName: mode.icon)
-                            .font(.system(size: 14))
+                            .font(.system(size: 12))
                             .frame(width: 28, height: 24)
                             .background(viewModel.viewMode == mode ?
                                        Color.accentColor : Color.clear)
                             .foregroundColor(viewModel.viewMode == mode ?
                                            .white : .primary)
-                            .cornerRadius(4)
+                            .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
                     .help(mode.rawValue)
                 }
             }
-            .padding(2)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(6)
-
-            Divider()
-                .frame(height: 16)
+            .padding(3)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
 
             // Evaluate button or progress
             if evaluationManager.isProcessing {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     ProgressView()
-                        .scaleEffect(0.7)
+                        .scaleEffect(0.6)
                     Text(evaluationManager.statusMessage)
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
-                        .frame(maxWidth: 200)
+                        .frame(maxWidth: 150)
 
-                    Button("Cancel") {
-                        evaluationManager.cancelEvaluation()
+                    Button(action: { evaluationManager.cancelEvaluation() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.red)
                     }
                     .buttonStyle(.plain)
-                    .foregroundColor(.red)
-                    .font(.caption)
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
             } else if !viewModel.selectedURLs.isEmpty {
                 Button(action: { evaluateSelectedImages() }) {
-                    Label("Evaluate (\(viewModel.selectedURLs.count))", systemImage: "sparkles")
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 11))
+                        Text("Evaluate")
+                            .font(.system(.caption, design: .rounded, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.accentColor)
+                    .clipShape(Capsule())
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(.plain)
                 .help("Evaluate selected images with AI")
             }
 
-            Divider()
-                .frame(height: 16)
-
-            // Settings button
+            // Settings button pill
             Button(action: { showingSettings = true }) {
                 Image(systemName: "gear")
-                    .font(.system(size: 14))
+                    .font(.system(size: 12))
+                    .foregroundColor(.primary)
+                    .frame(width: 28, height: 28)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
             }
             .buttonStyle(.plain)
             .help("Settings")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.regularMaterial)
+        .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
     }
 
     // MARK: - Evaluation
@@ -413,17 +467,18 @@ struct ImageBrowserView2: View {
     }
 }
 
-// MARK: - Custom Button Style
+// MARK: - Glass Button Style
 
-struct SidebarButtonStyle: ButtonStyle {
+struct GlassButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(.horizontal, 12)
+            .font(.callout)
+            .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(configuration.isPressed ?
-                       Color.accentColor.opacity(0.2) :
-                       Color.clear)
-            .cornerRadius(4)
+                       Color.white.opacity(0.15) :
+                       Color.white.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .contentShape(Rectangle())
     }
 }

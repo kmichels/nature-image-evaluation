@@ -12,6 +12,10 @@ struct ImageGridView2: View {
     @Environment(EvaluationManager.self) private var evaluationManager
     @FocusState private var isFocused: Bool
 
+    // Layout configuration for floating UI
+    var sidebarWidth: CGFloat = 0
+    private let toolbarHeight: CGFloat = 36 // Height for toolbar pills area (close to top)
+
     // Detail view state
     @State private var showingDetail = false
     @State private var detailURL: URL?
@@ -22,7 +26,9 @@ struct ImageGridView2: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let thumbnailSize = calculateThumbnailSize(for: geometry.size.width)
+            // Calculate available width accounting for floating sidebar
+            let availableWidth = geometry.size.width - sidebarWidth
+            let thumbnailSize = calculateThumbnailSize(for: availableWidth)
 
             ScrollView {
                 LazyVGrid(
@@ -49,9 +55,11 @@ struct ImageGridView2: View {
                         }
                     }
                 }
-                .padding(padding)
+                .padding(.top, toolbarHeight + padding) // Clear floating toolbar
+                .padding(.leading, sidebarWidth + padding) // Clear floating sidebar
+                .padding(.trailing, padding)
+                .padding(.bottom, padding)
             }
-            .background(Color(NSColor.textBackgroundColor))
             .focusable()
             .focused($isFocused)
             .onKeyPress(phases: .down) { press in
