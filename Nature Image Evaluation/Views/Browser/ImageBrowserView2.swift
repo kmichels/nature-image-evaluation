@@ -408,8 +408,9 @@ struct ImageBrowserView2: View {
 
     private func evaluateSelectedImages() {
         let urls = Array(viewModel.selectedURLs)
+        let folderURL = viewModel.currentFolder
         Task {
-            await evaluationManager.addImages(urls: urls)
+            await evaluationManager.addImages(urls: urls, folderURL: folderURL)
             do {
                 try await evaluationManager.startEvaluation()
                 // Refresh cache after evaluation completes

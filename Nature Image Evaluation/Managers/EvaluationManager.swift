@@ -122,21 +122,23 @@ final class EvaluationManager {
     // MARK: - Public Methods
 
     /// Add images to the evaluation queue
-    /// - Parameter urls: URLs of images to evaluate
+    /// - Parameters:
+    ///   - urls: URLs of images to evaluate
+    ///   - folderURL: The folder URL that contains the images (for security-scoped access)
     @MainActor
-    func addImages(urls: [URL]) async {
+    func addImages(urls: [URL], folderURL: URL? = nil) async {
         statusMessage = "Adding \(urls.count) images to queue..."
+
+        // Start security-scoped access on the folder if provided
+        let didStartFolderAccess = folderURL?.startAccessingSecurityScopedResource() ?? false
+        defer {
+            if didStartFolderAccess {
+                folderURL?.stopAccessingSecurityScopedResource()
+            }
+        }
 
         for (index, url) in urls.enumerated() {
             print("Processing image \(index + 1)/\(urls.count): \(url.path)")
-
-            // Try to access the file with security scope if needed
-            let didStartAccess = url.startAccessingSecurityScopedResource()
-            defer {
-                if didStartAccess {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
 
             do {
                 // Load image to get dimensions
@@ -289,6 +291,7 @@ final class EvaluationManager {
                         successfulEvaluations += 1
                     } catch {
                         failedEvaluations += 1
+                        print("❌ Error evaluating image: \(error)")
                         AppLogger.evaluation.error("❌ Error evaluating image: \(error.localizedDescription)")
                         currentError = error
 
@@ -425,17 +428,22 @@ final class EvaluationManager {
         }
 
         // Build enhanced prompt with technical context
+        print("🔧 Building enhanced prompt...")
         let enhancedPrompt = buildEnhancedPrompt(
             basePrompt: prompt,
             technicalAnalysis: technicalAnalysis
         )
 
         // Convert to base64
+        print("📸 Converting image to base64...")
         guard let base64 = imageProcessor.imageToBase64(image: processedImage) else {
+            print("❌ Failed to convert image to base64")
             throw EvaluationError.imageConversionFailed
         }
+        print("✅ Base64 conversion complete (length: \(base64.count) chars)")
 
         // Call API with enhanced context
+        print("🌐 Calling AI API with model: \(currentProvider.model)...")
         let response = try await apiService.evaluateImage(
             imageBase64: base64,
             prompt: enhancedPrompt,
