@@ -71,14 +71,14 @@ struct Constants {
     // MARK: - Image Processing
 
     /// Maximum dimension for images sent to API (pixels)
-    /// Options: 1568 (lower cost), 2048 (balanced), 2400 (high detail), 3000 (maximum detail)
-    static let maxImageDimension: Int = 2048  // Increased for better detail detection
+    /// Anthropic recommends 1568 max; larger images may exceed 5MB API limit
+    static let maxImageDimension: Int = 1568
 
     /// Thumbnail size for gallery display
     static let thumbnailSize: CGSize = CGSize(width: 100, height: 100)
 
-    /// JPEG compression quality for processed images
-    static let jpegCompressionQuality: CGFloat = 0.95  // Increased for better quality
+    /// JPEG compression quality for processed images (0.85 balances quality vs size)
+    static let jpegCompressionQuality: CGFloat = 0.85
 
     // MARK: - Pricing (per million tokens)
 
