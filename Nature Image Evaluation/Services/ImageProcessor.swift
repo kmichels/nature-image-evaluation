@@ -29,6 +29,7 @@ final class ImageProcessor {
         guard let imageRep = image.bestRepresentation(for: NSRect(origin: .zero, size: image.size),
                                                       context: nil,
                                                       hints: nil) else {
+            print("ImageProcessor: Failed to get image representation")
             return nil
         }
 
@@ -47,22 +48,37 @@ final class ImageProcessor {
             return image
         }
 
-        // Create CGImage for processing
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        // Try vImage approach first (faster)
+        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+           let resizedCGImage = resizeWithVImage(cgImage, targetWidth: newWidth, targetHeight: newHeight) {
+            return NSImage(cgImage: resizedCGImage, size: NSSize(width: newWidth, height: newHeight))
+        }
+
+        // Fallback: Draw into a new bitmap (works when NSImage is created from Data)
+        print("ImageProcessor: Using fallback drawing-based resize")
+        return resizeByDrawing(image: image, targetWidth: newWidth, targetHeight: newHeight)
+    }
+
+    /// Fallback resize method using NSGraphicsContext drawing
+    private func resizeByDrawing(image: NSImage, targetWidth: Int, targetHeight: Int) -> NSImage? {
+        let targetSize = NSSize(width: targetWidth, height: targetHeight)
+        let newImage = NSImage(size: targetSize)
+
+        newImage.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        image.draw(in: NSRect(origin: .zero, size: targetSize),
+                   from: NSRect(origin: .zero, size: image.size),
+                   operation: .copy,
+                   fraction: 1.0)
+        newImage.unlockFocus()
+
+        // Verify the image has content
+        guard newImage.isValid else {
+            print("ImageProcessor: Fallback resize produced invalid image")
             return nil
         }
 
-        // Resize using vImage
-        guard let resizedCGImage = resizeWithVImage(
-            cgImage,
-            targetWidth: newWidth,
-            targetHeight: newHeight
-        ) else {
-            return nil
-        }
-
-        // Convert back to NSImage
-        return NSImage(cgImage: resizedCGImage, size: NSSize(width: newWidth, height: newHeight))
+        return newImage
     }
 
     /// Generate thumbnail for gallery display

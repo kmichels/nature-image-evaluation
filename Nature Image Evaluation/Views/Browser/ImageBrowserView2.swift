@@ -24,6 +24,7 @@ struct ImageBrowserView2: View {
 
     // View customization
     @AppStorage("browserViewMode") private var savedViewMode: String = "grid"
+    @AppStorage("browserSortOrder") private var savedSortOrder: String = "Date Modified"
     @AppStorage("lastSelectedFolderBookmark") private var savedFolderBookmark: Data?
 
     init() {
@@ -41,6 +42,7 @@ struct ImageBrowserView2: View {
         }
         .onAppear {
             viewModel.viewMode = BrowserViewModel.ViewMode(rawValue: savedViewMode) ?? .grid
+            viewModel.sortOrder = BrowserViewModel.SortOrder(rawValue: savedSortOrder) ?? .dateModified
             loadSavedFolder()
         }
         .fileImporter(
@@ -252,9 +254,8 @@ struct ImageBrowserView2: View {
                 }
             }
 
-            // Floating toolbar at top-right (close to window edge)
+            // Floating toolbar at top-right (aligned with traffic lights)
             floatingToolbar
-                .padding(.top, 4)
                 .padding(.trailing, 8)
                 .padding(.leading, contentLeadingPadding)
         }
@@ -300,6 +301,7 @@ struct ImageBrowserView2: View {
                 ForEach(BrowserViewModel.SortOrder.allCases, id: \.self) { order in
                     Button(action: {
                         viewModel.sortOrder = order
+                        savedSortOrder = order.rawValue
                         viewModel.applyFiltersAndSorting()
                     }) {
                         HStack {
@@ -349,27 +351,25 @@ struct ImageBrowserView2: View {
             .background(.ultraThinMaterial)
             .clipShape(Capsule())
 
-            // Evaluate button or progress
+            // Evaluate button or progress (fixed size to prevent layout shift)
             if evaluationManager.isProcessing {
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     ProgressView()
-                        .scaleEffect(0.6)
-                    Text(evaluationManager.statusMessage)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .frame(maxWidth: 150)
-
+                        .scaleEffect(0.5)
+                        .frame(width: 12, height: 12)
+                    Text("Evaluating")
+                        .font(.system(.caption, design: .rounded, weight: .semibold))
                     Button(action: { evaluationManager.cancelEvaluation() }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(.red)
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.8))
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 10)
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(.ultraThinMaterial)
+                .background(Color.accentColor.opacity(0.8))
                 .clipShape(Capsule())
             } else if !viewModel.selectedURLs.isEmpty {
                 Button(action: { evaluateSelectedImages() }) {

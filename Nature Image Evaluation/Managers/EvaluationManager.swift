@@ -121,6 +121,9 @@ final class EvaluationManager {
 
     // MARK: - Public Methods
 
+    /// Security-scoped folder URL for current evaluation session
+    private var activeFolderAccess: URL?
+
     /// Add images to the evaluation queue
     /// - Parameters:
     ///   - urls: URLs of images to evaluate
@@ -130,22 +133,45 @@ final class EvaluationManager {
         statusMessage = "Adding \(urls.count) images to queue..."
 
         // Start security-scoped access on the folder if provided
-        let didStartFolderAccess = folderURL?.startAccessingSecurityScopedResource() ?? false
-        defer {
-            if didStartFolderAccess {
-                folderURL?.stopAccessingSecurityScopedResource()
+        if let folder = folderURL {
+            let didStart = folder.startAccessingSecurityScopedResource()
+            print("🔐 Security-scoped access for folder: \(didStart ? "GRANTED" : "DENIED") - \(folder.path)")
+            if didStart {
+                // Store reference to stop access later (don't stop during addImages - keep for evaluation)
+                activeFolderAccess = folder
             }
         }
 
         for (index, url) in urls.enumerated() {
             print("Processing image \(index + 1)/\(urls.count): \(url.path)")
 
+            // Debug: Check file accessibility
+            let fileManager = FileManager.default
+            let exists = fileManager.fileExists(atPath: url.path)
+            let readable = fileManager.isReadableFile(atPath: url.path)
+            print("  📁 File exists: \(exists), readable: \(readable)")
+
+            // Try starting security-scoped access on the file itself
+            let fileAccessStarted = url.startAccessingSecurityScopedResource()
+            print("  🔐 File security access: \(fileAccessStarted ? "started" : "not needed/failed")")
+
             do {
-                // Load image to get dimensions
-                guard let image = NSImage(contentsOf: url) else {
-                    print("Failed to load image: \(url.lastPathComponent)")
+                // Load image data first, then create NSImage
+                // This approach works better with security-scoped resources
+                let imageData: Data
+                do {
+                    imageData = try Data(contentsOf: url)
+                    print("  ✅ Loaded \(imageData.count) bytes")
+                } catch {
+                    print("  ❌ Failed to load file data: \(error.localizedDescription)")
                     continue
                 }
+
+                guard let image = NSImage(data: imageData) else {
+                    print("  ❌ Failed to create NSImage from data")
+                    continue
+                }
+                print("  ✅ Created NSImage: \(image.size)")
 
                 // Create security-scoped bookmark
                 // Note: This might fail if the file is outside allowed locations
@@ -180,13 +206,17 @@ final class EvaluationManager {
                 statusMessage = "Processing image \(index + 1) of \(urls.count)..."
 
                 if let resized = imageProcessor.resizeForEvaluation(image: image, maxDimension: imageResolution) {
+                    print("  ✅ Resized to: \(resized.size)")
+
                     // Generate unique path for processed image
                     let processedURL = getProcessedImageURL(for: imageEval.id!)
+                    print("  📂 Saving to: \(processedURL.path)")
 
                     // Save processed image
                     let fileSize = try imageProcessor.saveProcessedImage(resized, to: processedURL)
                     imageEval.processedFilePath = processedURL.path
                     imageEval.fileSize = fileSize
+                    print("  ✅ Saved processed image: \(fileSize) bytes")
 
                     // Get processed dimensions
                     if let rep = resized.representations.first {
@@ -198,9 +228,12 @@ final class EvaluationManager {
                     if let thumbnail = imageProcessor.generateThumbnail(image: resized) {
                         imageEval.thumbnailData = imageProcessor.thumbnailToData(thumbnail)
                     }
+                } else {
+                    print("  ❌ Failed to resize image")
                 }
 
                 evaluationQueue.append(imageEval)
+                print("  ✅ Added to queue (processedFilePath: \(imageEval.processedFilePath ?? "nil"))")
 
             } catch {
                 print("Error adding image \(url.lastPathComponent): \(error)")
@@ -376,6 +409,13 @@ final class EvaluationManager {
         evaluationTask = nil
         isProcessing = false
         statusMessage = "Evaluation cancelled"
+
+        // Release security-scoped access
+        if let folder = activeFolderAccess {
+            folder.stopAccessingSecurityScopedResource()
+            activeFolderAccess = nil
+            print("🔐 Released security-scoped access for folder (cancelled)")
+        }
     }
 
     /// Clear the evaluation queue
@@ -674,6 +714,13 @@ final class EvaluationManager {
     private func completeEvaluation() {
         isProcessing = false
         evaluationQueue.removeAll()
+
+        // Release security-scoped access
+        if let folder = activeFolderAccess {
+            folder.stopAccessingSecurityScopedResource()
+            activeFolderAccess = nil
+            print("🔐 Released security-scoped access for folder")
+        }
 
         // Complete the session
         if let session = currentSession {
