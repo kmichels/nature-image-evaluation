@@ -319,6 +319,8 @@ final class BrowserViewModel {
 
         let request = NSFetchRequest<ImageEvaluation>(entityName: "ImageEvaluation")
         request.predicate = NSPredicate(format: "processedFilePath != nil")
+        // Prefetch related objects to avoid lazy loading delays
+        request.relationshipKeyPathsForPrefetching = ["currentEvaluation", "evaluationHistory"]
 
         do {
             let evaluations = try viewContext.fetch(request)
@@ -334,15 +336,54 @@ final class BrowserViewModel {
         }
     }
 
+    /// Directly add an evaluation to the cache (most efficient - no Core Data fetch needed)
+    func addToEvaluationCache(url: URL, evaluation: ImageEvaluation) {
+        evaluationCache[url.path] = evaluation
+    }
+
+    /// Batch update cache for multiple URLs by fetching only those specific evaluations
+    func updateEvaluationCache(for urls: [URL]) {
+        // Refresh context to get latest data
+        viewContext.refreshAllObjects()
+
+        let urlPaths = Set(urls.map { $0.path })
+
+        let request = NSFetchRequest<ImageEvaluation>(entityName: "ImageEvaluation")
+        request.predicate = NSPredicate(format: "processedFilePath != nil")
+        // Prefetch related objects to avoid lazy loading delays
+        request.relationshipKeyPathsForPrefetching = ["currentEvaluation", "evaluationHistory"]
+
+        do {
+            let evaluations = try viewContext.fetch(request)
+            for eval in evaluations {
+                if let bookmarkData = eval.originalFilePath,
+                   let resolvedURL = resolveBookmark(bookmarkData),
+                   urlPaths.contains(resolvedURL.path) {
+                    evaluationCache[resolvedURL.path] = eval
+                }
+            }
+        } catch {
+            print("Error updating evaluation cache: \(error)")
+        }
+    }
+
     /// Resolve bookmark data to URL
     private func resolveBookmark(_ data: Data) -> URL? {
-        // First try as security-scoped bookmark
+        // Quick check: if data looks like a plain path string (starts with /), use it directly
+        // This avoids expensive bookmark resolution attempts for fallback path data
+        if data.first == 0x2F { // ASCII '/'
+            if let pathString = String(data: data, encoding: .utf8) {
+                return URL(fileURLWithPath: pathString)
+            }
+        }
+
+        // Try as security-scoped bookmark
         var isStale = false
         if let url = try? URL(resolvingBookmarkData: data, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) {
             return url
         }
 
-        // Fallback: try as plain path string
+        // Final fallback: try as plain path string
         if let pathString = String(data: data, encoding: .utf8) {
             return URL(fileURLWithPath: pathString)
         }

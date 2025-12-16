@@ -413,8 +413,8 @@ struct ImageBrowserView2: View {
             await evaluationManager.addImages(urls: urls, folderURL: folderURL)
             do {
                 try await evaluationManager.startEvaluation()
-                // Refresh cache after evaluation completes
-                viewModel.refreshEvaluationCache()
+                // Efficiently update cache only for evaluated URLs
+                viewModel.updateEvaluationCache(for: urls)
             } catch {
                 evaluationErrorMessage = error.localizedDescription
                 showingEvaluationError = true
