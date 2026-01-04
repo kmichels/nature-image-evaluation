@@ -18,7 +18,18 @@
 		71C8AD732ECA1B4D00ABD08A /* Saliency Map Research.txt in Resources */ = {isa = PBXBuildFile; fileRef = 71C8AD722ECA1B3900ABD08A /* Saliency Map Research.txt */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		713301562F0AB91F000CD04C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 71B7575C2EAFBB2500DF6430 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 71B757632EAFBB2500DF6430;
+			remoteInfo = "Nature Image Evaluation";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		713301522F0AB91F000CD04C /* Nature Image EvaluationTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Nature Image EvaluationTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		71B757642EAFBB2500DF6430 /* Nature Image Evaluation.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Nature Image Evaluation.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		71B757B02EAFCCB900DF6430 /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
 		71B757B12EAFCCB900DF6430 /* ENTITLEMENTS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ENTITLEMENTS.md; sourceTree = "<group>"; };
@@ -52,6 +63,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		713301532F0AB91F000CD04C /* Nature Image EvaluationTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Nature Image EvaluationTests";
+			sourceTree = "<group>";
+		};
 		71B757662EAFBB2500DF6430 /* Nature Image Evaluation */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -63,6 +79,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		7133014F2F0AB91F000CD04C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		71B757612EAFBB2500DF6430 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -83,6 +106,7 @@
 				71B757CE2EAFCCB900DF6430 /* README.md */,
 				71B757CF2EAFCCB900DF6430 /* sample-CLAUDE.md */,
 				71B757662EAFBB2500DF6430 /* Nature Image Evaluation */,
+				713301532F0AB91F000CD04C /* Nature Image EvaluationTests */,
 				71B757652EAFBB2500DF6430 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -91,6 +115,7 @@
 			isa = PBXGroup;
 			children = (
 				71B757642EAFBB2500DF6430 /* Nature Image Evaluation.app */,
+				713301522F0AB91F000CD04C /* Nature Image EvaluationTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -204,6 +229,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		713301512F0AB91F000CD04C /* Nature Image EvaluationTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 713301582F0AB91F000CD04C /* Build configuration list for PBXNativeTarget "Nature Image EvaluationTests" */;
+			buildPhases = (
+				7133014E2F0AB91F000CD04C /* Sources */,
+				7133014F2F0AB91F000CD04C /* Frameworks */,
+				713301502F0AB91F000CD04C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				713301572F0AB91F000CD04C /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				713301532F0AB91F000CD04C /* Nature Image EvaluationTests */,
+			);
+			name = "Nature Image EvaluationTests";
+			packageProductDependencies = (
+			);
+			productName = "Nature Image EvaluationTests";
+			productReference = 713301522F0AB91F000CD04C /* Nature Image EvaluationTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		71B757632EAFBB2500DF6430 /* Nature Image Evaluation */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 71B7578A2EAFBB2600DF6430 /* Build configuration list for PBXNativeTarget "Nature Image Evaluation" */;
@@ -233,9 +281,13 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2600;
+				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2610;
 				TargetAttributes = {
+					713301512F0AB91F000CD04C = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 71B757632EAFBB2500DF6430;
+					};
 					71B757632EAFBB2500DF6430 = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
@@ -262,11 +314,19 @@
 			projectRoot = "";
 			targets = (
 				71B757632EAFBB2500DF6430 /* Nature Image Evaluation */,
+				713301512F0AB91F000CD04C /* Nature Image EvaluationTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		713301502F0AB91F000CD04C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		71B757622EAFBB2500DF6430 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -286,6 +346,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		7133014E2F0AB91F000CD04C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		71B757602EAFBB2500DF6430 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -295,7 +362,57 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		713301572F0AB91F000CD04C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 71B757632EAFBB2500DF6430 /* Nature Image Evaluation */;
+			targetProxy = 713301562F0AB91F000CD04C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		713301592F0AB91F000CD04C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 85QL287QYW;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.tonalphoto.tech.Nature-Image-EvaluationTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nature Image Evaluation.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Nature Image Evaluation";
+			};
+			name = Debug;
+		};
+		7133015A2F0AB91F000CD04C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 85QL287QYW;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.tonalphoto.tech.Nature-Image-EvaluationTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Nature Image Evaluation.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Nature Image Evaluation";
+			};
+			name = Release;
+		};
 		71B757882EAFBB2600DF6430 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -525,6 +642,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		713301582F0AB91F000CD04C /* Build configuration list for PBXNativeTarget "Nature Image EvaluationTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				713301592F0AB91F000CD04C /* Debug */,
+				7133015A2F0AB91F000CD04C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		71B7575F2EAFBB2500DF6430 /* Build configuration list for PBXProject "Nature Image Evaluation" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
