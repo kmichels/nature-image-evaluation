@@ -5,8 +5,8 @@
 //  Created by Claude on 11/12/25.
 //
 
-import SwiftUI
 import CoreData
+import SwiftUI
 
 struct FolderGalleryView: View {
     let folder: MonitoredFolder
@@ -18,22 +18,22 @@ struct FolderGalleryView: View {
     @State private var folderImages: [URL] = []
     @State private var isLoadingImages = true
     @State private var loadError: Error?
-    @State private var selectedImages: Set<URL> = []  // URL-based selection
-    @State private var lastSelectedURL: URL?  // For shift-click range selection
-    @State private var lastSelectedIndex: Int?  // For shift-click range selection
+    @State private var selectedImages: Set<URL> = [] // URL-based selection
+    @State private var lastSelectedURL: URL? // For shift-click range selection
+    @State private var lastSelectedIndex: Int? // For shift-click range selection
     @State private var showingEvaluationSheet = false
-    @State private var evaluationManager = EvaluationManager()
-    @State private var folderURL: URL?  // Store resolved folder URL for security scope
-    @State private var evaluationCompletedCount = 0  // Trigger view refresh
-    @State private var detailViewImage: ImageEvaluation?  // For showing detail view
+    @State private var evaluationManager = EvaluationManager.withSavedPreferences()
+    @State private var folderURL: URL? // Store resolved folder URL for security scope
+    @State private var evaluationCompletedCount = 0 // Trigger view refresh
+    @State private var detailViewImage: ImageEvaluation? // For showing detail view
     @State private var sortOption: SortOption = .name
-    @State private var sortAscending: Bool = true  // Sort direction
+    @State private var sortAscending: Bool = true // Sort direction
     @State private var filterOption: FilterOption = .all
-    @State private var cachedFilteredImages: [URL] = []  // Cache sorted/filtered results
-    @State private var cachedEvaluations: [URL: ImageEvaluation] = [:]  // Cache evaluation dictionary
-    @State private var thumbnailCache: [URL: NSImage] = [:]  // Cache thumbnails
-    @State private var showOnlySelected = false  // Toggle to show only selected images
-    @State private var hasLoadedInitialImages = false  // Track if we've loaded images for this folder
+    @State private var cachedFilteredImages: [URL] = [] // Cache sorted/filtered results
+    @State private var cachedEvaluations: [URL: ImageEvaluation] = [:] // Cache evaluation dictionary
+    @State private var thumbnailCache: [URL: NSImage] = [:] // Cache thumbnails
+    @State private var showOnlySelected = false // Toggle to show only selected images
+    @State private var hasLoadedInitialImages = false // Track if we've loaded images for this folder
 
     // COMMENTED OUT: Grid layout - no longer needed with NSCollectionView
     // private let columns = [
@@ -60,7 +60,7 @@ struct FolderGalleryView: View {
     init(folder: MonitoredFolder) {
         self.folder = folder
         // Fetch all evaluations - we'll match them by filename
-        self._existingEvaluations = FetchRequest(
+        _existingEvaluations = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \ImageEvaluation.dateAdded, ascending: false)],
             animation: .default
         )
@@ -83,9 +83,9 @@ struct FolderGalleryView: View {
             onThumbnailLoaded: { url, image in
                 thumbnailCache[url] = image
             },
-            stableViewID: folder.id.uuidString  // Pass stable ID to the view
+            stableViewID: folder.id.uuidString // Pass stable ID to the view
         )
-        .id(folder.id)  // Use folder's UUID as stable identifier
+        .id(folder.id) // Use folder's UUID as stable identifier
     }
 
     private func updateFilteredImages() {
@@ -499,7 +499,8 @@ struct FolderGalleryView: View {
         let directionKey = "folderSortDirection_\(folder.id.uuidString)"
 
         if let savedSort = UserDefaults.standard.string(forKey: sortKey),
-           let option = SortOption(rawValue: savedSort) {
+           let option = SortOption(rawValue: savedSort)
+        {
             sortOption = option
         }
 
@@ -591,7 +592,8 @@ struct FolderGalleryView: View {
             if let bookmarkData = evaluation.originalFilePath {
                 var isStale = false
                 if let evaluationURL = try? URL(resolvingBookmarkData: bookmarkData, bookmarkDataIsStale: &isStale),
-                   evaluationURL.lastPathComponent == filename {
+                   evaluationURL.lastPathComponent == filename
+                {
                     return true
                 }
             }
@@ -745,7 +747,7 @@ struct FolderImageThumbnail: View {
     let url: URL
     let isSelected: Bool
     let existingEvaluation: ImageEvaluation?
-    let thumbnail: NSImage?  // Passed from parent
+    let thumbnail: NSImage? // Passed from parent
     var index: Int = 0
     let onSelection: (EventModifiers) -> Void
     let onDoubleTap: () -> Void
@@ -788,7 +790,8 @@ struct FolderImageThumbnail: View {
 
                 // Evaluation badge if exists
                 if let evaluation = existingEvaluation,
-                   let result = evaluation.currentEvaluation {
+                   let result = evaluation.currentEvaluation
+                {
                     VStack(spacing: 2) {
                         HStack(spacing: 4) {
                             VStack(spacing: 1) {
@@ -924,15 +927,6 @@ struct FolderImageThumbnail: View {
                 // Notify parent to cache this thumbnail
                 onThumbnailLoaded?(thumbnailImage)
             }
-        }
-    }
-
-    private func scoreColor(_ score: Double) -> Color {
-        switch score {
-        case 8...: return .green
-        case 6..<8: return .blue
-        case 4..<6: return .orange
-        default: return .red
         }
     }
 }

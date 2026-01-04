@@ -5,9 +5,9 @@
 //  Created by Claude Code on 10/28/25.
 //
 
-import SwiftUI
-import CoreData
 import AppKit
+import CoreData
+import SwiftUI
 
 struct ImageDetailView: View {
     let evaluation: ImageEvaluation
@@ -23,19 +23,26 @@ struct ImageDetailView: View {
     @State private var combinedMap: NSImage?
     @State private var isGeneratingSaliency = false
 
+    // MARK: - Cached Formatters
+
+    private static let byteCountFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useKB]
+        formatter.countStyle = .file
+        return formatter
+    }()
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
     enum SaliencyType: String, CaseIterable {
         case attention = "Attention"
         case objectness = "Objects"
         case combined = "Combined"
-    }
-
-    init(evaluation: ImageEvaluation) {
-        self.evaluation = evaluation
-        print("🟢 ImageDetailView.init")
-        print("  - Image ID: \(evaluation.id?.uuidString ?? "unknown")")
-        print("  - Has processed path: \(evaluation.processedFilePath != nil)")
-        print("  - Has original path: \(evaluation.originalFilePath != nil)")
-        print("  - Has thumbnail: \(evaluation.thumbnailData != nil)")
     }
 
     enum DetailTab: String, CaseIterable {
@@ -57,8 +64,7 @@ struct ImageDetailView: View {
     }
 
     var body: some View {
-        let _ = print("🟡 ImageDetailView.body called, displayedImage: \(displayedImage != nil), hasLoadedImage: \(hasLoadedImage)")
-        return HSplitView {
+        HSplitView {
             // Left side - Image
             VStack {
                 // Image display with optional saliency overlay
@@ -81,7 +87,6 @@ struct ImageDetailView: View {
                         ProgressView("Loading image...")
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .task {
-                                print("🟠 ProgressView.task triggered, hasLoadedImage: \(hasLoadedImage)")
                                 if !hasLoadedImage {
                                     loadImage()
                                 }
@@ -189,449 +194,30 @@ struct ImageDetailView: View {
 
                 // Tab View for detailed content
                 TabView(selection: $selectedTab) {
-                    // Evaluation Tab
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            if let result = evaluation.currentEvaluation {
-                                // Strengths
-                                if let strengths = result.strengths, !strengths.isEmpty {
-                                    DetailSection(title: "Strengths", icon: "checkmark.circle.fill", color: .green) {
-                                        ForEach(strengths, id: \.self) { strength in
-                                            HStack(alignment: .top) {
-                                                Image(systemName: "chevron.right")
-                                                    .font(.caption)
-                                                    .foregroundStyle(.green)
-                                                Text(strength)
-                                                    .font(.body)
-                                            }
-                                        }
-                                    }
-                                }
+                    evaluationTabContent
+                        .tabItem { Label("Evaluation", systemImage: "star.fill") }
+                        .tag(DetailTab.evaluation)
 
-                                // Improvements
-                                if let improvements = result.improvements, !improvements.isEmpty {
-                                    DetailSection(title: "Areas for Improvement", icon: "exclamationmark.triangle.fill", color: .orange) {
-                                        ForEach(improvements, id: \.self) { improvement in
-                                            HStack(alignment: .top) {
-                                                Image(systemName: "chevron.right")
-                                                    .font(.caption)
-                                                    .foregroundStyle(.orange)
-                                                Text(improvement)
-                                                    .font(.body)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .padding()
-                    }
-                    .tabItem {
-                        Label("Evaluation", systemImage: "star.fill")
-                    }
-                    .tag(DetailTab.evaluation)
+                    technicalTabContent
+                        .tabItem { Label("Technical", systemImage: "gearshape.2") }
+                        .tag(DetailTab.technical)
 
-                    // Technical Tab
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            if let result = evaluation.currentEvaluation {
-                                // Core Image Technical Analysis
-                                if result.technicalSharpness > 0 || result.technicalBlurAmount > 0 {
-                                    DetailSection(title: "Technical Analysis", icon: "camera.metering.matrix", color: .blue) {
-                                        VStack(alignment: .leading, spacing: 12) {
-                                            // Sharpness Score
-                                            HStack {
-                                                Label("Sharpness", systemImage: "scope")
-                                                    .frame(width: 120, alignment: .leading)
-                                                ProgressView(value: Double(result.technicalSharpness) / 10)
-                                                    .tint(sharpnessColor(result.technicalSharpness))
-                                                    .frame(maxWidth: .infinity)
-                                                Text(String(format: "%.1f", result.technicalSharpness))
-                                                    .font(.system(.body, design: .monospaced))
-                                                    .frame(width: 40, alignment: .trailing)
-                                            }
+                    commercialTabContent
+                        .tabItem { Label("Commercial", systemImage: "dollarsign.circle") }
+                        .tag(DetailTab.commercial)
 
-                                            // Blur Analysis
-                                            if result.technicalBlurAmount > 0.1 {
-                                                HStack {
-                                                    Label("Blur Detected", systemImage: "circle.hexagongrid.circle")
-                                                        .frame(width: 120, alignment: .leading)
-                                                    Text(result.technicalBlurType ?? "Unknown")
-                                                        .font(.system(.body, design: .monospaced))
-                                                    Text("(\(String(format: "%.1f%%", result.technicalBlurAmount * 100)))")
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                            }
-
-                                            // Artistic Intent
-                                            if let technique = result.technicalArtisticTechnique,
-                                               result.technicalIntentConfidence > 0.5 {
-                                                HStack {
-                                                    Label("Artistic Intent", systemImage: "paintbrush.pointed")
-                                                        .frame(width: 120, alignment: .leading)
-                                                    Text(technique)
-                                                        .font(.system(.body, design: .monospaced))
-                                                    Text("(\(String(format: "%.0f%%", result.technicalIntentConfidence * 100)) confidence)")
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                            }
-
-                                            // Focus Distribution
-                                            if let focusDistribution = result.technicalFocusDistribution {
-                                                HStack {
-                                                    Label("Focus Pattern", systemImage: "viewfinder.circle")
-                                                        .frame(width: 120, alignment: .leading)
-                                                    Text(focusDistribution)
-                                                        .font(.system(.body, design: .monospaced))
-                                                }
-                                            }
-
-                                            // Noise Level
-                                            if result.technicalNoiseLevel > 0 {
-                                                HStack {
-                                                    Label("Noise Level", systemImage: "waveform.path.ecg")
-                                                        .frame(width: 120, alignment: .leading)
-                                                    ProgressView(value: Double(result.technicalNoiseLevel))
-                                                        .tint(noiseColor(result.technicalNoiseLevel))
-                                                        .frame(maxWidth: .infinity)
-                                                    Text(noiseDescription(result.technicalNoiseLevel))
-                                                        .font(.system(.body, design: .monospaced))
-                                                        .frame(width: 80, alignment: .trailing)
-                                                }
-                                            }
-
-                                            // Contrast
-                                            if result.technicalContrast > 0 {
-                                                HStack {
-                                                    Label("Contrast", systemImage: "circle.lefthalf.filled")
-                                                        .frame(width: 120, alignment: .leading)
-                                                    Text(String(format: "%.1f:1", result.technicalContrast))
-                                                        .font(.system(.body, design: .monospaced))
-                                                }
-                                            }
-
-                                            // Exposure
-                                            if let exposure = result.technicalExposure {
-                                                HStack {
-                                                    Label("Exposure", systemImage: "sun.max")
-                                                        .frame(width: 120, alignment: .leading)
-                                                    Text(exposure)
-                                                        .font(.system(.body, design: .monospaced))
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Technical Innovations from AI
-                                if let innovations = result.technicalInnovations, !innovations.isEmpty {
-                                    DetailSection(title: "Artistic Techniques", icon: "camera.aperture", color: .purple) {
-                                        ForEach(innovations, id: \.self) { innovation in
-                                            HStack(alignment: .top) {
-                                                Image(systemName: "chevron.right")
-                                                    .font(.caption)
-                                                    .foregroundStyle(.purple)
-                                                Text(innovation)
-                                                    .font(.body)
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Print Size Recommendation
-                                if let printSize = result.printSizeRecommendation {
-                                    DetailSection(title: "Print Size Recommendation", icon: "printer.fill", color: .indigo) {
-                                        Text(printSize)
-                                            .font(.body)
-                                    }
-                                }
-                            }
-
-                            // Processing Details
-                            DetailSection(title: "Image Information", icon: "info.circle.fill", color: .gray) {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    if evaluation.originalWidth > 0 && evaluation.originalHeight > 0 {
-                                        HStack {
-                                            Text("Original Size:")
-                                                .foregroundStyle(.secondary)
-                                            Text("\(evaluation.originalWidth) × \(evaluation.originalHeight)")
-                                                .font(.system(.body, design: .monospaced))
-                                        }
-                                    }
-
-                                    if evaluation.processedWidth > 0 && evaluation.processedHeight > 0 {
-                                        HStack {
-                                            Text("Processed Size:")
-                                                .foregroundStyle(.secondary)
-                                            Text("\(evaluation.processedWidth) × \(evaluation.processedHeight)")
-                                                .font(.system(.body, design: .monospaced))
-                                        }
-                                    }
-
-                                    if evaluation.aspectRatio > 0 {
-                                        HStack {
-                                            Text("Aspect Ratio:")
-                                                .foregroundStyle(.secondary)
-                                            Text(String(format: "%.2f:1", evaluation.aspectRatio))
-                                                .font(.system(.body, design: .monospaced))
-                                        }
-                                    }
-
-                                    if evaluation.fileSize > 0 {
-                                        HStack {
-                                            Text("File Size:")
-                                                .foregroundStyle(.secondary)
-                                            Text(formatFileSize(evaluation.fileSize))
-                                                .font(.system(.body, design: .monospaced))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .padding()
-                    }
-                    .tabItem {
-                        Label("Technical", systemImage: "gearshape.2")
-                    }
-                    .tag(DetailTab.technical)
-
-                    // Commercial Tab
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            if let result = evaluation.currentEvaluation {
-                                // Market Comparison
-                                if let market = result.marketComparison {
-                                    DetailSection(title: "Market Analysis", icon: "chart.line.uptrend.xyaxis", color: .green) {
-                                        Text(market)
-                                            .font(.body)
-                                    }
-                                }
-
-                                // Price Tier
-                                if let priceTier = result.priceTierSuggestion {
-                                    DetailSection(title: "Price Tier", icon: "dollarsign.circle.fill", color: .green) {
-                                        HStack {
-                                            PriceTierIndicator(tier: priceTier)
-                                            Spacer()
-                                        }
-                                    }
-                                }
-
-                                // Cost Analysis
-                                if result.estimatedCost > 0 {
-                                    DetailSection(title: "Evaluation Cost", icon: "creditcard.fill", color: .blue) {
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            if result.inputTokens > 0 || result.outputTokens > 0 {
-                                                HStack {
-                                                    Text("Tokens Used:")
-                                                        .foregroundStyle(.secondary)
-                                                    Text("\(result.inputTokens) in / \(result.outputTokens) out")
-                                                }
-                                            }
-                                            HStack {
-                                                Text("API Cost:")
-                                                    .foregroundStyle(.secondary)
-                                                Text(String(format: "$%.4f", result.estimatedCost))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .padding()
-                    }
-                    .tabItem {
-                        Label("Commercial", systemImage: "dollarsign.circle")
-                    }
-                    .tag(DetailTab.commercial)
-
-                    // SEO Metadata Tab
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            if let result = evaluation.currentEvaluation,
-                               result.title != nil || result.descriptionText != nil {
-
-                                // Show placement recommendation banner
-                                if let placement = result.primaryPlacement {
-                                    HStack {
-                                        Image(systemName: placementIcon(for: placement))
-                                            .foregroundStyle(placementColor(for: placement))
-                                        Text("Recommended for: \(placement)")
-                                            .font(.headline)
-                                        Spacer()
-                                    }
-                                    .padding()
-                                    .background(placementColor(for: placement).opacity(0.1))
-                                    .cornerRadius(8)
-                                }
-
-                                // Title & Description
-                                if let title = result.title {
-                                    DetailSection(title: "Title", icon: "text.badge.star", color: .blue) {
-                                        HStack {
-                                            Text(title)
-                                                .font(.title3.bold())
-                                                .textSelection(.enabled)
-                                            Spacer()
-                                            Button(action: {
-                                                copyToClipboard(title)
-                                            }) {
-                                                Image(systemName: "doc.on.doc")
-                                                    .font(.system(size: 14))
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .help("Copy to clipboard")
-                                        }
-                                    }
-                                }
-
-                                if let description = result.descriptionText {
-                                    DetailSection(title: "Description", icon: "text.alignleft", color: .green) {
-                                        HStack(alignment: .top) {
-                                            Text(description)
-                                                .font(.body)
-                                                .textSelection(.enabled)
-                                            Spacer()
-                                            Button(action: {
-                                                copyToClipboard(description)
-                                            }) {
-                                                Image(systemName: "doc.on.doc")
-                                                    .font(.system(size: 14))
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .help("Copy to clipboard")
-                                        }
-                                    }
-                                }
-
-                                // Keywords (moved above Alt Text)
-                                if let keywords = result.keywords, !keywords.isEmpty {
-                                    DetailSection(title: "Keywords (\(keywords.count))", icon: "tag.fill", color: .purple) {
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            ScrollView(.horizontal, showsIndicators: false) {
-                                                HStack(spacing: 8) {
-                                                    ForEach(keywords, id: \.self) { keyword in
-                                                        Text(keyword)
-                                                            .font(.caption)
-                                                            .padding(.horizontal, 8)
-                                                            .padding(.vertical, 4)
-                                                            .background(Color.purple.opacity(0.1))
-                                                            .cornerRadius(4)
-                                                    }
-                                                }
-                                            }
-
-                                            // Copyable keywords list with copy button
-                                            HStack(alignment: .top) {
-                                                Text(keywords.joined(separator: ", "))
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .textSelection(.enabled)
-                                                Spacer()
-                                                Button(action: {
-                                                    copyToClipboard(keywords.joined(separator: ", "))
-                                                }) {
-                                                    Image(systemName: "doc.on.doc")
-                                                        .font(.system(size: 14))
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                                .buttonStyle(.plain)
-                                                .help("Copy keywords to clipboard")
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Alt Text (moved below Keywords)
-                                if let altText = result.altText {
-                                    DetailSection(title: "Alt Text", icon: "accessibility", color: .orange) {
-                                        HStack(alignment: .top) {
-                                            Text(altText)
-                                                .font(.body)
-                                                .textSelection(.enabled)
-                                            Spacer()
-                                            Button(action: {
-                                                copyToClipboard(altText)
-                                            }) {
-                                                Image(systemName: "doc.on.doc")
-                                                    .font(.system(size: 14))
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .help("Copy to clipboard")
-                                        }
-                                    }
-                                }
-
-                                // Suggested Categories
-                                if let categories = result.suggestedCategories, !categories.isEmpty {
-                                    DetailSection(title: "Categories", icon: "folder.fill", color: .indigo) {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            ForEach(categories, id: \.self) { category in
-                                                HStack {
-                                                    Image(systemName: "chevron.right")
-                                                        .font(.caption)
-                                                        .foregroundStyle(.indigo)
-                                                    Text(category)
-                                                        .font(.body)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Best Use Cases
-                                if let useCases = result.bestUseCases, !useCases.isEmpty {
-                                    DetailSection(title: "Best Use Cases", icon: "lightbulb.fill", color: .yellow) {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            ForEach(useCases, id: \.self) { useCase in
-                                                HStack {
-                                                    Image(systemName: "checkmark.circle.fill")
-                                                        .font(.caption)
-                                                        .foregroundStyle(.green)
-                                                    Text(useCase)
-                                                        .font(.body)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                            } else {
-                                VStack(spacing: 20) {
-                                    Image(systemName: "tag.slash")
-                                        .font(.system(size: 48))
-                                        .foregroundStyle(.secondary)
-                                    Text("No commercial metadata available")
-                                        .font(.title3)
-                                        .foregroundStyle(.secondary)
-                                    Text("Metadata is generated for images with STORE or BOTH placement")
-                                        .font(.caption)
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .padding()
-                            }
-                        }
-                        .padding()
-                    }
-                    .tabItem {
-                        Label("SEO Metadata", systemImage: "tag.fill")
-                    }
-                    .tag(DetailTab.metadata)
+                    metadataTabContent
+                        .tabItem { Label("SEO Metadata", systemImage: "tag.fill") }
+                        .tag(DetailTab.metadata)
                 }
             }
             .frame(minWidth: 500)
         }
         .frame(minWidth: 900, minHeight: 600)
         .onAppear {
-            print("🔴 onAppear triggered")
             loadImage()
         }
         .onDisappear {
-            print("🔴 onDisappear - cleaning up resources")
             // Clean up resources to prevent memory leaks
             displayedImage = nil
             attentionMap = nil
@@ -641,12 +227,9 @@ struct ImageDetailView: View {
             hasLoadedImage = false
         }
         .task {
-            print("🟣 Main view .task triggered")
             // Backup loading mechanism in case onAppear doesn't trigger
             try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-            print("🟣 After 0.1s delay - displayedImage: \(displayedImage != nil), hasLoadedImage: \(hasLoadedImage)")
             if displayedImage == nil && !hasLoadedImage {
-                print("🟣 Calling loadImage from backup task")
                 loadImage()
             }
         }
@@ -669,49 +252,36 @@ struct ImageDetailView: View {
     // MARK: - Helper Methods
 
     private func loadImage() {
-        print("⚪ loadImage() called, hasLoadedImage: \(hasLoadedImage)")
-        guard !hasLoadedImage else {
-            print("⚪ Already loaded, returning")
-            return
-        }
+        guard !hasLoadedImage else { return }
         hasLoadedImage = true
-        print("⚪ Starting image load process...")
 
         // Try to load processed image first
         if let processedPath = evaluation.processedFilePath {
-            print("⚪ Trying processed path: \(processedPath)")
             displayedImage = NSImage(contentsOfFile: processedPath)
-            print("⚪ Loaded from processed path: \(displayedImage != nil)")
         }
 
         // Fallback to loading from bookmark
         if displayedImage == nil,
-           let bookmarkData = evaluation.originalFilePath {
-            print("⚪ Trying bookmark...")
+           let bookmarkData = evaluation.originalFilePath
+        {
             do {
                 var isStale = false
                 let url = try URL(resolvingBookmarkData: bookmarkData, bookmarkDataIsStale: &isStale)
-                print("⚪ Bookmark resolved to: \(url.path)")
-
                 if url.startAccessingSecurityScopedResource() {
                     defer { url.stopAccessingSecurityScopedResource() }
                     displayedImage = NSImage(contentsOf: url)
-                    print("⚪ Loaded from bookmark: \(displayedImage != nil)")
                 }
             } catch {
-                print("⚪ Error resolving bookmark: \(error)")
+                // Bookmark resolution failed, try thumbnail fallback
             }
         }
 
         // Final fallback to thumbnail
         if displayedImage == nil,
-           let thumbnailData = evaluation.thumbnailData {
-            print("⚪ Trying thumbnail...")
+           let thumbnailData = evaluation.thumbnailData
+        {
             displayedImage = NSImage(data: thumbnailData)
-            print("⚪ Loaded from thumbnail: \(displayedImage != nil)")
         }
-
-        print("⚪ loadImage() completed, displayedImage: \(displayedImage != nil)")
     }
 
     private func generateSaliencyMaps() async {
@@ -751,27 +321,14 @@ struct ImageDetailView: View {
     }
 
     private func formatFileSize(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useMB, .useKB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
+        Self.byteCountFormatter.string(fromByteCount: bytes)
     }
 
     private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        Self.dateFormatter.string(from: date)
     }
 
-    private func scoreColor(_ score: Double) -> Color {
-        switch score {
-        case 8...: return .green
-        case 6..<8: return .blue
-        case 4..<6: return .orange
-        default: return .red
-        }
-    }
+    // Note: Uses global scoreColor() from ImageGridView2.swift
 
     private func placementIcon(for placement: String) -> String {
         switch placement {
@@ -796,27 +353,27 @@ struct ImageDetailView: View {
     private func sharpnessColor(_ sharpness: Float) -> Color {
         switch sharpness {
         case 7...: return .green
-        case 5..<7: return .blue
-        case 3..<5: return .orange
+        case 5 ..< 7: return .blue
+        case 3 ..< 5: return .orange
         default: return .red
         }
     }
 
     private func noiseColor(_ noise: Float) -> Color {
         switch noise {
-        case 0..<0.2: return .green
-        case 0.2..<0.4: return .blue
-        case 0.4..<0.6: return .orange
+        case 0 ..< 0.2: return .green
+        case 0.2 ..< 0.4: return .blue
+        case 0.4 ..< 0.6: return .orange
         default: return .red
         }
     }
 
     private func noiseDescription(_ noise: Float) -> String {
         switch noise {
-        case 0..<0.1: return "Very Low"
-        case 0.1..<0.3: return "Low"
-        case 0.3..<0.5: return "Moderate"
-        case 0.5..<0.7: return "High"
+        case 0 ..< 0.1: return "Very Low"
+        case 0.1 ..< 0.3: return "Low"
+        case 0.3 ..< 0.5: return "Moderate"
+        case 0.5 ..< 0.7: return "High"
         default: return "Very High"
         }
     }
@@ -825,6 +382,413 @@ struct ImageDetailView: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+    }
+
+    // MARK: - Tab Content Views
+
+    @ViewBuilder
+    private var evaluationTabContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                if let result = evaluation.currentEvaluation {
+                    // Strengths
+                    if let strengths = result.strengths, !strengths.isEmpty {
+                        DetailSection(title: "Strengths", icon: "checkmark.circle.fill", color: .green) {
+                            ForEach(strengths, id: \.self) { strength in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "star.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.green)
+                                    Text(strength)
+                                }
+                            }
+                        }
+                    }
+
+                    // Improvements
+                    if let improvements = result.improvements, !improvements.isEmpty {
+                        DetailSection(title: "Areas for Improvement", icon: "arrow.up.circle.fill", color: .orange) {
+                            ForEach(improvements, id: \.self) { improvement in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "lightbulb.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.orange)
+                                    Text(improvement)
+                                }
+                            }
+                        }
+                    }
+
+                    // Market Comparison
+                    if let marketComparison = result.marketComparison, !marketComparison.isEmpty {
+                        DetailSection(title: "Market Comparison", icon: "chart.bar.fill", color: .blue) {
+                            Text(marketComparison)
+                                .font(.body)
+                        }
+                    }
+
+                    // Technical Innovations
+                    if let innovations = result.technicalInnovations, !innovations.isEmpty {
+                        DetailSection(title: "Technical Innovations", icon: "sparkles", color: .purple) {
+                            ForEach(innovations, id: \.self) { innovation in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "star.circle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.purple)
+                                    Text(innovation)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    noEvaluationView
+                }
+            }
+            .padding()
+        }
+    }
+
+    @ViewBuilder
+    private var technicalTabContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                if let result = evaluation.currentEvaluation {
+                    // Sharpness Analysis
+                    DetailSection(title: "Sharpness", icon: "scope", color: .blue) {
+                        HStack {
+                            Text(String(format: "%.1f", result.technicalSharpness))
+                                .font(.title2.bold())
+                                .foregroundStyle(sharpnessColor(Float(result.technicalSharpness)))
+                            Text("/ 10")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            if let blurType = result.technicalBlurType {
+                                Text(blurType.capitalized)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.secondary.opacity(0.2))
+                                    .cornerRadius(4)
+                            }
+                        }
+                    }
+
+                    // Noise Level
+                    DetailSection(title: "Noise Level", icon: "waveform", color: .orange) {
+                        HStack {
+                            Text(noiseDescription(Float(result.technicalNoiseLevel)))
+                                .font(.headline)
+                                .foregroundStyle(noiseColor(Float(result.technicalNoiseLevel)))
+                            Spacer()
+                            Text(String(format: "%.2f", result.technicalNoiseLevel))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    // Focus & Exposure
+                    HStack(spacing: 20) {
+                        if let focus = result.technicalFocusDistribution {
+                            VStack(alignment: .leading) {
+                                Text("Focus")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(focus)
+                                    .font(.headline)
+                            }
+                        }
+
+                        if let exposure = result.technicalExposure {
+                            VStack(alignment: .leading) {
+                                Text("Exposure")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(exposure.capitalized)
+                                    .font(.headline)
+                            }
+                        }
+
+                        VStack(alignment: .leading) {
+                            Text("Contrast")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(String(format: "%.1f", result.technicalContrast))
+                                .font(.headline)
+                        }
+                    }
+                    .padding()
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(8)
+
+                    // Artistic Technique
+                    if let technique = result.technicalArtisticTechnique, technique != "standard" {
+                        DetailSection(title: "Artistic Technique", icon: "paintbrush.fill", color: .purple) {
+                            HStack {
+                                Text(technique.replacingOccurrences(of: "_", with: " ").capitalized)
+                                    .font(.headline)
+                                Spacer()
+                                Text("\(Int(result.technicalIntentConfidence * 100))% confidence")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    // API Usage
+                    DetailSection(title: "API Usage", icon: "cpu", color: .gray) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Input Tokens:")
+                                Spacer()
+                                Text("\(result.inputTokens)")
+                            }
+                            HStack {
+                                Text("Output Tokens:")
+                                Spacer()
+                                Text("\(result.outputTokens)")
+                            }
+                            Divider()
+                            HStack {
+                                Text("Estimated Cost:")
+                                Spacer()
+                                Text(String(format: "$%.4f", result.estimatedCost))
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                        .font(.callout)
+                    }
+                } else {
+                    noEvaluationView
+                }
+            }
+            .padding()
+        }
+    }
+
+    @ViewBuilder
+    private var commercialTabContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                if let result = evaluation.currentEvaluation {
+                    // Print Size Recommendation
+                    if let printSize = result.printSizeRecommendation {
+                        DetailSection(title: "Print Size", icon: "doc.fill", color: .blue) {
+                            Text(printSize)
+                                .font(.title3.bold())
+                        }
+                    }
+
+                    // Price Tier
+                    if let priceTier = result.priceTierSuggestion ?? result.suggestedPriceTier {
+                        DetailSection(title: "Price Tier", icon: "dollarsign.circle.fill", color: .green) {
+                            PriceTierIndicator(tier: priceTier)
+                        }
+                    }
+
+                    // Best Use Cases
+                    if let useCases = result.bestUseCases, !useCases.isEmpty {
+                        DetailSection(title: "Best Use Cases", icon: "lightbulb.fill", color: .yellow) {
+                            ForEach(useCases, id: \.self) { useCase in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.green)
+                                    Text(useCase)
+                                }
+                            }
+                        }
+                    }
+
+                    // Sellability breakdown
+                    DetailSection(title: "Commercial Potential", icon: "chart.line.uptrend.xyaxis", color: .teal) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Sellability Score:")
+                                Spacer()
+                                Text(String(format: "%.1f / 10", result.sellabilityScore))
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(scoreColor(result.sellabilityScore))
+                            }
+                            Text("Based on market trends, subject matter appeal, and commercial viability.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } else {
+                    noEvaluationView
+                }
+            }
+            .padding()
+        }
+    }
+
+    @ViewBuilder
+    private var metadataTabContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                if let result = evaluation.currentEvaluation,
+                   result.title != nil || result.descriptionText != nil
+                {
+                    // Show placement recommendation banner
+                    if let placement = result.primaryPlacement {
+                        HStack {
+                            Image(systemName: placementIcon(for: placement))
+                                .foregroundStyle(placementColor(for: placement))
+                            Text("Recommended for: \(placement)")
+                                .font(.headline)
+                            Spacer()
+                        }
+                        .padding()
+                        .background(placementColor(for: placement).opacity(0.1))
+                        .cornerRadius(8)
+                    }
+
+                    // Title & Description
+                    if let title = result.title {
+                        DetailSection(title: "Title", icon: "text.badge.star", color: .blue) {
+                            HStack {
+                                Text(title)
+                                    .font(.title3.bold())
+                                    .textSelection(.enabled)
+                                Spacer()
+                                copyButton(title)
+                            }
+                        }
+                    }
+
+                    if let description = result.descriptionText {
+                        DetailSection(title: "Description", icon: "text.alignleft", color: .green) {
+                            HStack(alignment: .top) {
+                                Text(description)
+                                    .font(.body)
+                                    .textSelection(.enabled)
+                                Spacer()
+                                copyButton(description)
+                            }
+                        }
+                    }
+
+                    // Keywords
+                    if let keywords = result.keywords, !keywords.isEmpty {
+                        DetailSection(title: "Keywords (\(keywords.count))", icon: "tag.fill", color: .purple) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(keywords, id: \.self) { keyword in
+                                            Text(keyword)
+                                                .font(.caption)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color.purple.opacity(0.1))
+                                                .cornerRadius(4)
+                                        }
+                                    }
+                                }
+
+                                HStack(alignment: .top) {
+                                    Text(keywords.joined(separator: ", "))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .textSelection(.enabled)
+                                    Spacer()
+                                    copyButton(keywords.joined(separator: ", "))
+                                }
+                            }
+                        }
+                    }
+
+                    // Alt Text
+                    if let altText = result.altText {
+                        DetailSection(title: "Alt Text", icon: "accessibility", color: .orange) {
+                            HStack(alignment: .top) {
+                                Text(altText)
+                                    .font(.body)
+                                    .textSelection(.enabled)
+                                Spacer()
+                                copyButton(altText)
+                            }
+                        }
+                    }
+
+                    // Suggested Categories
+                    if let categories = result.suggestedCategories, !categories.isEmpty {
+                        DetailSection(title: "Categories", icon: "folder.fill", color: .indigo) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(categories, id: \.self) { category in
+                                    HStack {
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundStyle(.indigo)
+                                        Text(category)
+                                            .font(.body)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Best Use Cases
+                    if let useCases = result.bestUseCases, !useCases.isEmpty {
+                        DetailSection(title: "Best Use Cases", icon: "lightbulb.fill", color: .yellow) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(useCases, id: \.self) { useCase in
+                                    HStack {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.caption)
+                                            .foregroundStyle(.green)
+                                        Text(useCase)
+                                            .font(.body)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                } else {
+                    VStack(spacing: 20) {
+                        Image(systemName: "tag.slash")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.secondary)
+                        Text("No commercial metadata available")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                        Text("Metadata is generated for images with STORE or BOTH placement")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding()
+                }
+            }
+            .padding()
+        }
+    }
+
+    @ViewBuilder
+    private var noEvaluationView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+            Text("Not Evaluated")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+            Text("This image has not been evaluated yet")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+    }
+
+    @ViewBuilder
+    private func copyButton(_ text: String) -> some View {
+        Button(action: {
+            copyToClipboard(text)
+        }) {
+            Image(systemName: "doc.on.doc")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help("Copy to clipboard")
     }
 }
 
@@ -878,8 +842,8 @@ struct CircularProgressView<Content: View>: View {
     private var progressColor: Color {
         switch value {
         case 0.8...: return .green
-        case 0.6..<0.8: return .blue
-        case 0.4..<0.6: return .orange
+        case 0.6 ..< 0.8: return .blue
+        case 0.4 ..< 0.6: return .orange
         default: return .red
         }
     }
@@ -936,7 +900,7 @@ struct PriceTierIndicator: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            ForEach(0..<3) { index in
+            ForEach(0 ..< 3) { index in
                 RoundedRectangle(cornerRadius: 2)
                     .fill(index < tierLevel ? Color.green : Color.gray.opacity(0.3))
                     .frame(width: 30, height: 8)

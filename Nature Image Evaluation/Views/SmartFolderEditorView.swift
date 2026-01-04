@@ -5,8 +5,8 @@
 //  Created by Claude on 11/14/25.
 //
 
-import SwiftUI
 import CoreData
+import SwiftUI
 
 struct SmartFolderEditorView: View {
     @Environment(\.dismiss) private var dismiss
@@ -27,7 +27,8 @@ struct SmartFolderEditorView: View {
             _folderName = State(initialValue: folder.name ?? "")
             _folderIcon = State(initialValue: folder.icon ?? "sparkle.magnifyingglass")
             if let predicateString = folder.smartPredicate,
-               let existingCriteria = SmartFolderCriteria.fromJSONString(predicateString) {
+               let existingCriteria = SmartFolderCriteria.fromJSONString(predicateString)
+            {
                 _criteria = State(initialValue: existingCriteria)
                 _matchAll = State(initialValue: existingCriteria.matchAll)
             }
@@ -151,7 +152,7 @@ struct SmartFolderEditorView: View {
             }
         }
         .alert("Error", isPresented: $showingError) {
-            Button("OK") { }
+            Button("OK") {}
         } message: {
             Text(errorMessage)
         }
@@ -245,98 +246,113 @@ struct ValueEditor: View {
     @State private var numberValue: Double = 0.0
     @State private var boolValue: Bool = true
     @State private var placementValue: String = "PORTFOLIO"
-    @State private var dateValue: Date = Date()
+    @State private var dateValue: Date = .init()
     @State private var daysValue: Int = 7
 
     var body: some View {
         Group {
             switch criteriaType.valueType {
-            case .number:
-                HStack {
-                    TextField("Value", value: $numberValue, format: .number.precision(.fractionLength(1)))
-                        .textFieldStyle(.roundedBorder)
-                        .onChange(of: numberValue) { _, newValue in
-                            value = .number(newValue)
-                        }
-                    Stepper("", value: $numberValue, in: 0...10, step: 0.5)
-                }
-                .onAppear {
-                    if case .number(let v) = value {
-                        numberValue = v
-                    } else {
-                        numberValue = 7.0
-                        value = .number(7.0)
-                    }
-                }
+            case .number: numberEditor
+            case .placement: placementEditor
+            case .boolean: booleanEditor
+            case .date: dateEditor
+            }
+        }
+    }
 
-            case .placement:
-                Picker("", selection: $placementValue) {
-                    Text("PORTFOLIO").tag("PORTFOLIO")
-                    Text("STORE").tag("STORE")
-                    Text("BOTH").tag("BOTH")
-                    Text("ARCHIVE").tag("ARCHIVE")
-                    Text("PRACTICE").tag("PRACTICE")
-                }
-                .onChange(of: placementValue) { _, newValue in
-                    value = .placement(newValue)
-                }
-                .onAppear {
-                    if case .placement(let v) = value {
-                        placementValue = v
-                    } else {
-                        value = .placement("PORTFOLIO")
-                    }
-                }
+    // MARK: - Value Type Editors
 
-            case .boolean:
-                Toggle("", isOn: $boolValue)
-                    .onChange(of: boolValue) { _, newValue in
-                        value = .boolean(newValue)
-                    }
-                    .onAppear {
-                        if case .boolean(let v) = value {
-                            boolValue = v
-                        } else {
-                            value = .boolean(true)
-                        }
-                    }
+    @ViewBuilder
+    private var numberEditor: some View {
+        HStack {
+            TextField("Value", value: $numberValue, format: .number.precision(.fractionLength(1)))
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: numberValue) { _, newValue in
+                    value = .number(newValue)
+                }
+            Stepper("", value: $numberValue, in: 0 ... 10, step: 0.5)
+        }
+        .onAppear {
+            if case let .number(v) = value {
+                numberValue = v
+            } else {
+                numberValue = 7.0
+                value = .number(7.0)
+            }
+        }
+    }
 
-            case .date:
-                if criteriaType == .dateAdded || criteriaType == .dateEvaluated {
-                    HStack {
-                        TextField("Days", value: $daysValue, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 60)
-                        Text("days")
-                    }
-                    .onChange(of: daysValue) { _, newValue in
-                        var components = DateComponents()
-                        components.day = -newValue
-                        value = .dateInterval(components)
-                    }
-                    .onAppear {
-                        if case .dateInterval(let components) = value {
-                            daysValue = abs(components.day ?? 7)
-                        } else {
-                            var components = DateComponents()
-                            components.day = -7
-                            value = .dateInterval(components)
-                        }
-                    }
+    @ViewBuilder
+    private var placementEditor: some View {
+        Picker("", selection: $placementValue) {
+            Text("PORTFOLIO").tag("PORTFOLIO")
+            Text("STORE").tag("STORE")
+            Text("BOTH").tag("BOTH")
+            Text("ARCHIVE").tag("ARCHIVE")
+            Text("PRACTICE").tag("PRACTICE")
+        }
+        .onChange(of: placementValue) { _, newValue in
+            value = .placement(newValue)
+        }
+        .onAppear {
+            if case let .placement(v) = value {
+                placementValue = v
+            } else {
+                value = .placement("PORTFOLIO")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var booleanEditor: some View {
+        Toggle("", isOn: $boolValue)
+            .onChange(of: boolValue) { _, newValue in
+                value = .boolean(newValue)
+            }
+            .onAppear {
+                if case let .boolean(v) = value {
+                    boolValue = v
                 } else {
-                    DatePicker("", selection: $dateValue, displayedComponents: [.date])
-                        .onChange(of: dateValue) { _, newValue in
-                            value = .date(newValue)
-                        }
-                        .onAppear {
-                            if case .date(let v) = value {
-                                dateValue = v
-                            } else {
-                                value = .date(Date())
-                            }
-                        }
+                    value = .boolean(true)
                 }
             }
+    }
+
+    @ViewBuilder
+    private var dateEditor: some View {
+        if criteriaType == .dateAdded || criteriaType == .dateEvaluated {
+            HStack {
+                TextField("Days", value: $daysValue, format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 60)
+                Text("days")
+            }
+            .onChange(of: daysValue) { _, newValue in
+                var components = DateComponents()
+                components.day = -newValue
+                value = .dateInterval(components)
+            }
+            .onAppear {
+                if case let .dateInterval(components) = value {
+                    daysValue = abs(components.day ?? 7)
+                } else {
+                    var components = DateComponents()
+                    components.day = -7
+                    value = .dateInterval(components)
+                }
+            }
+        } else {
+            DatePicker("", selection: $dateValue, displayedComponents: [.date])
+                .onChange(of: dateValue) { _, newValue in
+                    value = .date(newValue)
+                }
+                .onAppear {
+                    if case let .date(v) = value {
+                        dateValue = v
+                    } else {
+                        value = .date(Date())
+                    }
+                }
         }
     }
 }
@@ -354,7 +370,7 @@ struct TemplatePickerView: View {
             ("Recently Added", "Images added in the last 7 days", .recentlyAdded),
             ("High Commercial Value", "Images with high sellability score", .highCommercialValue),
             ("Needs Improvement", "Low-scoring images for learning", .needsImprovement),
-            ("Favorites", "Images marked as favorites", .favorites)
+            ("Favorites", "Images marked as favorites", .favorites),
         ]
     }
 

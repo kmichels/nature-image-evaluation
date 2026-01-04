@@ -9,7 +9,6 @@ import Foundation
 
 /// Loads evaluation prompts from bundled resources
 final class PromptLoader {
-
     static let shared = PromptLoader()
 
     private var cachedEvaluationPrompt: String?
@@ -94,9 +93,7 @@ final class PromptLoader {
         do {
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
             if let modDate = attributes[.modificationDate] as? Date {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy.MM.dd"
-                return formatter.string(from: modDate)
+                return Formatters.versionDate.string(from: modDate)
             }
         } catch {
             print("Error getting prompt version: \(error)")

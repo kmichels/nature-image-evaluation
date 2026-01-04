@@ -5,10 +5,63 @@
 //  Created by Claude Code on 10/27/25.
 //
 
-import Foundation
 import CoreGraphics
+import Foundation
+import SwiftUI
 
-struct Constants {
+// MARK: - Shared Formatters
+
+enum Formatters {
+    /// ISO8601 formatter for API date parsing
+    static let iso8601: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        return formatter
+    }()
+
+    /// Medium date style formatter
+    static let mediumDate: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter
+    }()
+
+    /// Medium date with short time formatter
+    static let mediumDateTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    /// Timestamp formatter (HH:mm:ss.SSS)
+    static let timestamp: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter
+    }()
+
+    /// Version date formatter (yyyy.MM.dd)
+    static let versionDate: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy.MM.dd"
+        return formatter
+    }()
+}
+
+// MARK: - Shared Score Color
+
+/// Returns a color representing the score quality (8+: green, 6-8: blue, 4-6: orange, <4: red)
+func scoreColor(_ score: Double) -> Color {
+    switch score {
+    case 8.0...: return .green
+    case 6.0 ..< 8.0: return .blue
+    case 4.0 ..< 6.0: return .orange
+    default: return .red
+    }
+}
+
+enum Constants {
     // MARK: - API Configuration
 
     /// Anthropic API
@@ -21,7 +74,7 @@ struct Constants {
         AnthropicModel(id: "claude-opus-4-1", name: "Claude Opus 4.1", description: "Previous best for complex reasoning", inputCost: 15.0, outputCost: 75.0),
         AnthropicModel(id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", description: "Balanced performance & cost", inputCost: 3.0, outputCost: 15.0),
         AnthropicModel(id: "claude-haiku-4-5", name: "Claude Haiku 4.5", description: "Fast & cheaper option", inputCost: 1.0, outputCost: 5.0),
-        AnthropicModel(id: "claude-haiku-3-5", name: "Claude Haiku 3.5", description: "Most economical choice", inputCost: 0.25, outputCost: 1.25)
+        AnthropicModel(id: "claude-haiku-3-5", name: "Claude Haiku 3.5", description: "Most economical choice", inputCost: 0.25, outputCost: 1.25),
     ]
 
     /// OpenAI API (for future GPT-4 Vision support)
@@ -75,7 +128,7 @@ struct Constants {
     static let maxImageDimension: Int = 1568
 
     /// Thumbnail size for gallery display
-    static let thumbnailSize: CGSize = CGSize(width: 100, height: 100)
+    static let thumbnailSize: CGSize = .init(width: 100, height: 100)
 
     /// JPEG compression quality for processed images (0.85 balances quality vs size)
     static let jpegCompressionQuality: CGFloat = 0.85
@@ -83,13 +136,13 @@ struct Constants {
     // MARK: - Pricing (per million tokens)
 
     /// Anthropic Claude Sonnet 4.x input token cost
-    static let anthropicInputTokenCostPerMillion = 3.00  // $3 per million
+    static let anthropicInputTokenCostPerMillion = 3.00 // $3 per million
 
     /// Anthropic Claude Sonnet 4.x output token cost
     static let anthropicOutputTokenCostPerMillion = 15.00 // $15 per million
 
     /// OpenAI GPT-4 Vision input token cost (approximate)
-    static let openAIInputTokenCostPerMillion = 10.00  // $10 per million
+    static let openAIInputTokenCostPerMillion = 10.00 // $10 per million
 
     /// OpenAI GPT-4 Vision output token cost (approximate)
     static let openAIOutputTokenCostPerMillion = 30.00 // $30 per million
@@ -148,7 +201,7 @@ struct Constants {
         case openai = "OpenAI GPT-4 Vision"
 
         var displayName: String {
-            return self.rawValue
+            return rawValue
         }
 
         var defaultModel: String {
@@ -168,7 +221,7 @@ struct AnthropicModel: Identifiable, Hashable {
     let id: String
     let name: String
     let description: String
-    let inputCost: Double  // Cost per million tokens
+    let inputCost: Double // Cost per million tokens
     let outputCost: Double // Cost per million tokens
 
     var displayName: String {

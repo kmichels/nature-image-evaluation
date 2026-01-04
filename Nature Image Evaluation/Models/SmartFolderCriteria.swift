@@ -138,17 +138,15 @@ enum CriteriaValue: Codable {
 
     var displayValue: String {
         switch self {
-        case .number(let value):
+        case let .number(value):
             return String(format: "%.1f", value)
-        case .string(let value):
+        case let .string(value):
             return value
-        case .boolean(let value):
+        case let .boolean(value):
             return value ? "Yes" : "No"
-        case .date(let value):
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            return formatter.string(from: value)
-        case .dateInterval(let components):
+        case let .date(value):
+            return Formatters.mediumDate.string(from: value)
+        case let .dateInterval(components):
             if let days = components.day {
                 return "\(days) days"
             } else if let weeks = components.weekOfYear {
@@ -157,7 +155,7 @@ enum CriteriaValue: Codable {
                 return "\(months) months"
             }
             return "Unknown"
-        case .placement(let value):
+        case let .placement(value):
             return value
         }
     }
@@ -172,12 +170,12 @@ extension SmartFolderCriteria {
         let predicates = rules.compactMap { rule -> NSPredicate? in
             switch rule.criteriaType {
             case .overallScore, .compositionScore, .qualityScore, .sellabilityScore, .artisticScore:
-                guard case .number(let value) = rule.value else { return nil }
+                guard case let .number(value) = rule.value else { return nil }
                 return NSPredicate(format: "%K \(rule.comparison.predicateOperator) %f",
-                                 rule.criteriaType.keyPath, value)
+                                   rule.criteriaType.keyPath, value)
 
             case .placement:
-                guard case .placement(let value) = rule.value else { return nil }
+                guard case let .placement(value) = rule.value else { return nil }
                 if rule.comparison == .equal {
                     return NSPredicate(format: "%K == %@", rule.criteriaType.keyPath, value)
                 } else {
@@ -185,7 +183,7 @@ extension SmartFolderCriteria {
                 }
 
             case .evaluationStatus:
-                guard case .boolean(let value) = rule.value else { return nil }
+                guard case let .boolean(value) = rule.value else { return nil }
                 if value {
                     return NSPredicate(format: "currentEvaluation != nil")
                 } else {
@@ -193,18 +191,19 @@ extension SmartFolderCriteria {
                 }
 
             case .dateAdded, .dateEvaluated:
-                if case .date(let date) = rule.value {
+                if case let .date(date) = rule.value {
                     return NSPredicate(format: "%K \(rule.comparison.predicateOperator) %@",
-                                     rule.criteriaType.keyPath, date as NSDate)
-                } else if case .dateInterval(let components) = rule.value,
-                         rule.comparison == .inLast {
+                                       rule.criteriaType.keyPath, date as NSDate)
+                } else if case let .dateInterval(components) = rule.value,
+                          rule.comparison == .inLast
+                {
                     let date = Calendar.current.date(byAdding: components, to: Date())!
                     return NSPredicate(format: "%K >= %@", rule.criteriaType.keyPath, date as NSDate)
                 }
                 return nil
 
             case .favorite:
-                guard case .boolean(let value) = rule.value else { return nil }
+                guard case let .boolean(value) = rule.value else { return nil }
                 return NSPredicate(format: "%K == %@", rule.criteriaType.keyPath, NSNumber(value: value))
             }
         }
@@ -238,13 +237,13 @@ extension SmartFolderCriteria {
     static var portfolioQuality: SmartFolderCriteria {
         SmartFolderCriteria(rules: [
             CriteriaRule(criteriaType: .overallScore, comparison: .greaterThanOrEqual, value: .number(8.0)),
-            CriteriaRule(criteriaType: .placement, comparison: .equal, value: .placement("PORTFOLIO"))
+            CriteriaRule(criteriaType: .placement, comparison: .equal, value: .placement("PORTFOLIO")),
         ], matchAll: false)
     }
 
     static var needsReview: SmartFolderCriteria {
         SmartFolderCriteria(rules: [
-            CriteriaRule(criteriaType: .evaluationStatus, comparison: .equal, value: .boolean(false))
+            CriteriaRule(criteriaType: .evaluationStatus, comparison: .equal, value: .boolean(false)),
         ], matchAll: true)
     }
 
@@ -252,27 +251,27 @@ extension SmartFolderCriteria {
         var components = DateComponents()
         components.day = -7
         return SmartFolderCriteria(rules: [
-            CriteriaRule(criteriaType: .dateAdded, comparison: .inLast, value: .dateInterval(components))
+            CriteriaRule(criteriaType: .dateAdded, comparison: .inLast, value: .dateInterval(components)),
         ], matchAll: true)
     }
 
     static var highCommercialValue: SmartFolderCriteria {
         SmartFolderCriteria(rules: [
             CriteriaRule(criteriaType: .sellabilityScore, comparison: .greaterThanOrEqual, value: .number(8.5)),
-            CriteriaRule(criteriaType: .placement, comparison: .equal, value: .placement("STORE"))
+            CriteriaRule(criteriaType: .placement, comparison: .equal, value: .placement("STORE")),
         ], matchAll: false)
     }
 
     static var needsImprovement: SmartFolderCriteria {
         SmartFolderCriteria(rules: [
             CriteriaRule(criteriaType: .overallScore, comparison: .lessThan, value: .number(5.0)),
-            CriteriaRule(criteriaType: .placement, comparison: .equal, value: .placement("ARCHIVE"))
+            CriteriaRule(criteriaType: .placement, comparison: .equal, value: .placement("ARCHIVE")),
         ], matchAll: false)
     }
 
     static var favorites: SmartFolderCriteria {
         SmartFolderCriteria(rules: [
-            CriteriaRule(criteriaType: .favorite, comparison: .equal, value: .boolean(true))
+            CriteriaRule(criteriaType: .favorite, comparison: .equal, value: .boolean(true)),
         ], matchAll: true)
     }
 }

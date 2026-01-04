@@ -5,8 +5,8 @@
 //  Created by Claude Code on 10/27/25.
 //
 
-import SwiftUI
 import CoreData
+import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -19,7 +19,7 @@ struct SettingsView: View {
     @State private var openAIAPIKey: String = ""
     @State private var selectedAnthropicModel: String = Constants.anthropicDefaultModel
     @State private var requestDelay: Double = Constants.defaultRequestDelay
-    @State private var maxBatchSize: Double = Double(Constants.maxBatchSize)
+    @State private var maxBatchSize: Double = .init(Constants.maxBatchSize)
     @State private var imageResolution: Int = Constants.maxImageDimension
 
     @State private var isTestingConnection = false
@@ -37,342 +37,14 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 30) {
-                // Header
-                VStack(spacing: 8) {
-                    Image(systemName: "gear")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.secondary)
-
-                    Text("Settings")
-                        .font(.largeTitle.bold())
-
-                    Text("Configure API access and evaluation parameters")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.bottom)
-
-                // API Configuration Section
-                GroupBox {
-                    VStack(alignment: .leading, spacing: 20) {
-                        Label("API Configuration", systemImage: "key.fill")
-                            .font(.headline)
-
-                        Divider()
-
-                        // Provider Selection
-                        Picker("API Provider", selection: $selectedProvider) {
-                            ForEach(Constants.APIProvider.allCases, id: \.self) { provider in
-                                Text(provider.displayName)
-                                    .tag(provider)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .onChange(of: selectedProvider) { _, _ in
-                            testResult = nil
-                        }
-
-                        // API Key Entry
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label(apiKeyLabel, systemImage: "lock.fill")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-
-                            HStack {
-                                SecureField(apiKeyPlaceholder, text: apiKeyBinding)
-                                    .textFieldStyle(.roundedBorder)
-                                    .disabled(isTestingConnection)
-                                    .onChange(of: currentAPIKey) { oldValue, newValue in
-                                        // If key changes, mark as not saved
-                                        if oldValue != newValue && !oldValue.isEmpty {
-                                            switch selectedProvider {
-                                            case .anthropic:
-                                                anthropicKeySaved = false
-                                            case .openai:
-                                                openAIKeySaved = false
-                                            }
-                                            testResult = nil
-                                        }
-                                    }
-                                    .onSubmit {
-                                        if !currentAPIKey.isEmpty {
-                                            testConnection()
-                                        }
-                                    }
-
-                                if isKeySavedInKeychain() {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
-                                        .help("API Key is saved in Keychain")
-                                } else if !currentAPIKey.isEmpty {
-                                    Button(action: saveAPIKey) {
-                                        Image(systemName: "arrow.down.circle")
-                                            .foregroundStyle(.blue)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .help("Save API Key to Keychain")
-                                }
-                            }
-
-                            if isKeySavedInKeychain() {
-                                Text("API key is saved securely in Keychain")
-                                    .font(.caption)
-                                    .foregroundStyle(.green)
-                            } else if !currentAPIKey.isEmpty {
-                                Text("Test connection to save API key")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        // Test Connection Button
-                        HStack {
-                            Button(action: testConnection) {
-                                HStack {
-                                    if isTestingConnection {
-                                        ProgressView()
-                                            .scaleEffect(0.7)
-                                    } else {
-                                        Image(systemName: "network")
-                                    }
-                                    Text("Test Connection")
-                                }
-                                .frame(width: 150)
-                            }
-                            .disabled(currentAPIKey.isEmpty || isTestingConnection)
-
-                            Spacer()
-
-                            // Test Result
-                            if let result = testResult {
-                                HStack(spacing: 6) {
-                                    Image(systemName: result.success ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                        .foregroundStyle(result.success ? .green : .red)
-
-                                    Text(result.message)
-                                        .font(.caption)
-                                        .foregroundStyle(result.success ? Color.primary : Color.red)
-                                }
-                            }
-                        }
-                    }
-                    .padding()
-                }
-
-                // Model Selection (for Anthropic)
+                headerSection
+                apiConfigurationSection
                 if selectedProvider == .anthropic {
-                    GroupBox {
-                        VStack(alignment: .leading, spacing: 20) {
-                            Label("Model Selection", systemImage: "cpu")
-                                .font(.headline)
-
-                            Divider()
-
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Select Claude Model")
-                                    .font(.subheadline)
-
-                                ForEach(Constants.anthropicModels, id: \.id) { model in
-                                    HStack {
-                                        RadioButton(
-                                            isSelected: selectedAnthropicModel == model.id,
-                                            action: {
-                                                selectedAnthropicModel = model.id
-                                                UserDefaults.standard.set(model.id, forKey: "selectedAnthropicModel")
-                                            }
-                                        )
-
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(model.name)
-                                                .font(.body)
-                                            Text(model.description)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                            Text(model.costDisplay)
-                                                .font(.caption)
-                                                .foregroundStyle(.tertiary)
-                                        }
-
-                                        Spacer()
-                                    }
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        selectedAnthropicModel = model.id
-                                        UserDefaults.standard.set(model.id, forKey: "selectedAnthropicModel")
-                                    }
-                                }
-
-                                Divider()
-
-                                // Show current selection
-                                if let currentModel = Constants.anthropicModels.first(where: { $0.id == selectedAnthropicModel }) {
-                                    HStack {
-                                        Image(systemName: "info.circle")
-                                            .foregroundStyle(.blue)
-                                        Text("Using: \(currentModel.name)")
-                                            .font(.caption)
-                                            .foregroundStyle(.blue)
-                                    }
-                                }
-                            }
-                        }
-                        .padding()
-                    }
+                    modelSelectionSection
                 }
-
-                // Rate Limiting Configuration
-                GroupBox {
-                    VStack(alignment: .leading, spacing: 20) {
-                        Label("Rate Limiting", systemImage: "timer")
-                            .font(.headline)
-
-                        Divider()
-
-                        // Request Delay
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("Delay between requests")
-                                Spacer()
-                                Text("\(requestDelay, specifier: "%.1f") seconds")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .font(.subheadline)
-
-                            Slider(value: $requestDelay,
-                                   in: Constants.minimumRequestDelay...Constants.maximumRequestDelay,
-                                   step: 0.5)
-                                .onChange(of: requestDelay) { _, newValue in
-                                    UserDefaults.standard.set(newValue, forKey: "requestDelay")
-                                }
-
-                            Text("Longer delays reduce rate limit errors but increase processing time")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        // Batch Size
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("Images per batch")
-                                Spacer()
-                                Text("\(Int(maxBatchSize)) images")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .font(.subheadline)
-
-                            Slider(value: $maxBatchSize,
-                                   in: Double(Constants.minBatchSize)...Double(Constants.maximumBatchSize),
-                                   step: 5)
-                                .onChange(of: maxBatchSize) { _, newValue in
-                                    UserDefaults.standard.set(Int(newValue), forKey: "maxBatchSize")
-                                }
-
-                            Text("Process images in batches with breaks between")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Divider()
-
-                        // Image Resolution
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("Image Resolution")
-                                Spacer()
-                                Text("\(imageResolution)px")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .font(.subheadline)
-
-                            Picker("", selection: $imageResolution) {
-                                Text("1568px - Lower cost").tag(1568)
-                                Text("2048px - Balanced").tag(2048)
-                                Text("2400px - High detail").tag(2400)
-                                Text("3000px - Maximum").tag(3000)
-                            }
-                            .pickerStyle(.segmented)
-                            .onChange(of: imageResolution) { _, newValue in
-                                UserDefaults.standard.set(newValue, forKey: "imageResolution")
-                            }
-
-                            HStack {
-                                Image(systemName: "info.circle.fill")
-                                    .foregroundStyle(.blue)
-                                    .imageScale(.small)
-                                Text("Higher resolution improves detail detection but increases API costs (~1.7x per step up)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .padding()
-                }
-
-                // API Usage Statistics
-                GroupBox {
-                    VStack(alignment: .leading, spacing: 20) {
-                        Label("API Usage Statistics", systemImage: "chart.bar.fill")
-                            .font(.headline)
-
-                        Divider()
-
-                        if let stats = apiStats {
-                            HStack {
-                                StatView(label: "Images Evaluated",
-                                        value: "\(stats.totalImagesEvaluated)",
-                                        icon: "photo.stack")
-
-                                Spacer()
-
-                                StatView(label: "Tokens Used",
-                                        value: formatNumber(stats.totalTokensUsed),
-                                        icon: "text.word.spacing")
-
-                                Spacer()
-
-                                StatView(label: "Total Cost",
-                                        value: String(format: "$%.2f", stats.totalCost),
-                                        icon: "dollarsign.circle")
-                            }
-
-                            Divider()
-
-                            HStack {
-                                Text("Stats since: \(stats.lastResetDate ?? Date(), formatter: dateFormatter)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-
-                                Spacer()
-
-                                Button("Reset Stats") {
-                                    resetStats()
-                                }
-                                .buttonStyle(.link)
-                                .font(.caption)
-                            }
-                        } else {
-                            Text("No usage data available")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding()
-                }
-
-                // Footer
-                HStack {
-                    Text("All API keys are stored securely in macOS Keychain")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-
-                    Button("Done") {
-                        saveSettings()
-                        dismiss()
-                    }
-                    .keyboardShortcut(.defaultAction)
-                }
-                .padding(.top)
+                rateLimitingSection
+                apiUsageSection
+                footerSection
             }
             .padding(30)
         }
@@ -380,28 +52,389 @@ struct SettingsView: View {
         .onAppear {
             loadSettings()
             loadAPIStats()
-
-            // Load saved preferences
-            let savedResolution = UserDefaults.standard.integer(forKey: "imageResolution")
-            if savedResolution > 0 {
-                imageResolution = savedResolution
-            }
-
-            let savedDelay = UserDefaults.standard.double(forKey: "requestDelay")
-            if savedDelay > 0 {
-                requestDelay = savedDelay
-            }
-
-            let savedBatchSize = UserDefaults.standard.integer(forKey: "maxBatchSize")
-            if savedBatchSize > 0 {
-                maxBatchSize = Double(savedBatchSize)
-            }
+            loadSavedPreferences()
         }
         .alert("Connection Test", isPresented: $showingTestAlert) {
-            Button("OK") { }
+            Button("OK") {}
         } message: {
             Text(testResult?.details ?? "Test completed")
         }
+    }
+
+    // MARK: - Section Views
+
+    @ViewBuilder
+    private var headerSection: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "gear")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+
+            Text("Settings")
+                .font(.largeTitle.bold())
+
+            Text("Configure API access and evaluation parameters")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.bottom)
+    }
+
+    @ViewBuilder
+    private var apiConfigurationSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 20) {
+                Label("API Configuration", systemImage: "key.fill")
+                    .font(.headline)
+
+                Divider()
+
+                Picker("API Provider", selection: $selectedProvider) {
+                    ForEach(Constants.APIProvider.allCases, id: \.self) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: selectedProvider) { _, _ in
+                    testResult = nil
+                }
+
+                apiKeyEntrySection
+                testConnectionSection
+            }
+            .padding()
+        }
+    }
+
+    @ViewBuilder
+    private var apiKeyEntrySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(apiKeyLabel, systemImage: "lock.fill")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                SecureField(apiKeyPlaceholder, text: apiKeyBinding)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(isTestingConnection)
+                    .onChange(of: currentAPIKey) { oldValue, newValue in
+                        if oldValue != newValue, !oldValue.isEmpty {
+                            markKeyAsUnsaved()
+                            testResult = nil
+                        }
+                    }
+                    .onSubmit {
+                        if !currentAPIKey.isEmpty { testConnection() }
+                    }
+
+                apiKeyStatusIcon
+            }
+
+            apiKeyStatusText
+        }
+    }
+
+    @ViewBuilder
+    private var apiKeyStatusIcon: some View {
+        if isKeySavedInKeychain() {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .help("API Key is saved in Keychain")
+        } else if !currentAPIKey.isEmpty {
+            Button(action: saveAPIKey) {
+                Image(systemName: "arrow.down.circle")
+                    .foregroundStyle(.blue)
+            }
+            .buttonStyle(.plain)
+            .help("Save API Key to Keychain")
+        }
+    }
+
+    @ViewBuilder
+    private var apiKeyStatusText: some View {
+        if isKeySavedInKeychain() {
+            Text("API key is saved securely in Keychain")
+                .font(.caption)
+                .foregroundStyle(.green)
+        } else if !currentAPIKey.isEmpty {
+            Text("Test connection to save API key")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var testConnectionSection: some View {
+        HStack {
+            Button(action: testConnection) {
+                HStack {
+                    if isTestingConnection {
+                        ProgressView().scaleEffect(0.7)
+                    } else {
+                        Image(systemName: "network")
+                    }
+                    Text("Test Connection")
+                }
+                .frame(width: 150)
+            }
+            .disabled(currentAPIKey.isEmpty || isTestingConnection)
+
+            Spacer()
+
+            if let result = testResult {
+                HStack(spacing: 6) {
+                    Image(systemName: result.success ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundStyle(result.success ? .green : .red)
+                    Text(result.message)
+                        .font(.caption)
+                        .foregroundStyle(result.success ? Color.primary : Color.red)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var modelSelectionSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 20) {
+                Label("Model Selection", systemImage: "cpu")
+                    .font(.headline)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Select Claude Model")
+                        .font(.subheadline)
+
+                    ForEach(Constants.anthropicModels, id: \.id) { model in
+                        modelRow(model)
+                    }
+
+                    Divider()
+
+                    if let currentModel = Constants.anthropicModels.first(where: { $0.id == selectedAnthropicModel }) {
+                        HStack {
+                            Image(systemName: "info.circle")
+                                .foregroundStyle(.blue)
+                            Text("Using: \(currentModel.name)")
+                                .font(.caption)
+                                .foregroundStyle(.blue)
+                        }
+                    }
+                }
+            }
+            .padding()
+        }
+    }
+
+    @ViewBuilder
+    private func modelRow(_ model: AnthropicModel) -> some View {
+        HStack {
+            RadioButton(
+                isSelected: selectedAnthropicModel == model.id,
+                action: { selectModel(model.id) }
+            )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(model.name).font(.body)
+                Text(model.description).font(.caption).foregroundStyle(.secondary)
+                Text(model.costDisplay).font(.caption).foregroundStyle(.tertiary)
+            }
+
+            Spacer()
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { selectModel(model.id) }
+    }
+
+    @ViewBuilder
+    private var rateLimitingSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 20) {
+                Label("Rate Limiting", systemImage: "timer")
+                    .font(.headline)
+
+                Divider()
+
+                requestDelaySlider
+                batchSizeSlider
+
+                Divider()
+
+                imageResolutionPicker
+            }
+            .padding()
+        }
+    }
+
+    @ViewBuilder
+    private var requestDelaySlider: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Delay between requests")
+                Spacer()
+                Text("\(requestDelay, specifier: "%.1f") seconds")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+
+            Slider(value: $requestDelay,
+                   in: Constants.minimumRequestDelay ... Constants.maximumRequestDelay,
+                   step: 0.5)
+                .onChange(of: requestDelay) { _, newValue in
+                    UserDefaults.standard.set(newValue, forKey: "requestDelay")
+                }
+
+            Text("Longer delays reduce rate limit errors but increase processing time")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var batchSizeSlider: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Images per batch")
+                Spacer()
+                Text("\(Int(maxBatchSize)) images")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+
+            Slider(value: $maxBatchSize,
+                   in: Double(Constants.minBatchSize) ... Double(Constants.maximumBatchSize),
+                   step: 5)
+                .onChange(of: maxBatchSize) { _, newValue in
+                    UserDefaults.standard.set(Int(newValue), forKey: "maxBatchSize")
+                }
+
+            Text("Process images in batches with breaks between")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var imageResolutionPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Image Resolution")
+                Spacer()
+                Text("\(imageResolution)px")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+
+            Picker("", selection: $imageResolution) {
+                Text("1568px - Lower cost").tag(1568)
+                Text("2048px - Balanced").tag(2048)
+                Text("2400px - High detail").tag(2400)
+                Text("3000px - Maximum").tag(3000)
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: imageResolution) { _, newValue in
+                UserDefaults.standard.set(newValue, forKey: "imageResolution")
+            }
+
+            HStack {
+                Image(systemName: "info.circle.fill")
+                    .foregroundStyle(.blue)
+                    .imageScale(.small)
+                Text("Higher resolution improves detail detection but increases API costs (~1.7x per step up)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var apiUsageSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 20) {
+                Label("API Usage Statistics", systemImage: "chart.bar.fill")
+                    .font(.headline)
+
+                Divider()
+
+                if let stats = apiStats {
+                    HStack {
+                        StatView(label: "Images Evaluated",
+                                 value: "\(stats.totalImagesEvaluated)",
+                                 icon: "photo.stack")
+                        Spacer()
+                        StatView(label: "Tokens Used",
+                                 value: formatNumber(stats.totalTokensUsed),
+                                 icon: "text.word.spacing")
+                        Spacer()
+                        StatView(label: "Total Cost",
+                                 value: String(format: "$%.2f", stats.totalCost),
+                                 icon: "dollarsign.circle")
+                    }
+
+                    Divider()
+
+                    HStack {
+                        Text("Stats since: \(stats.lastResetDate ?? Date(), formatter: Self.dateFormatter)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Reset Stats") { resetStats() }
+                            .buttonStyle(.link)
+                            .font(.caption)
+                    }
+                } else {
+                    Text("No usage data available")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding()
+        }
+    }
+
+    @ViewBuilder
+    private var footerSection: some View {
+        HStack {
+            Text("All API keys are stored securely in macOS Keychain")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Button("Done") {
+                saveSettings()
+                dismiss()
+            }
+            .keyboardShortcut(.defaultAction)
+        }
+        .padding(.top)
+    }
+
+    // MARK: - Helper Methods
+
+    private func selectModel(_ modelId: String) {
+        selectedAnthropicModel = modelId
+        UserDefaults.standard.set(modelId, forKey: "selectedAnthropicModel")
+    }
+
+    private func markKeyAsUnsaved() {
+        switch selectedProvider {
+        case .anthropic:
+            anthropicKeySaved = false
+        case .openai:
+            openAIKeySaved = false
+        }
+    }
+
+    private func loadSavedPreferences() {
+        let savedResolution = UserDefaults.standard.integer(forKey: "imageResolution")
+        if savedResolution > 0 { imageResolution = savedResolution }
+
+        let savedDelay = UserDefaults.standard.double(forKey: "requestDelay")
+        if savedDelay > 0 { requestDelay = savedDelay }
+
+        let savedBatchSize = UserDefaults.standard.integer(forKey: "maxBatchSize")
+        if savedBatchSize > 0 { maxBatchSize = Double(savedBatchSize) }
     }
 
     // MARK: - Computed Properties
@@ -580,7 +613,7 @@ struct SettingsView: View {
                     details = "Invalid API key. Please check your key and try again."
                 case .rateLimitExceeded:
                     details = "Rate limit exceeded. Your API key is valid but you've hit the rate limit."
-                case .networkError(let err):
+                case let .networkError(err):
                     details = "Network error: \(err.localizedDescription)"
                 default:
                     details = error.localizedDescription
@@ -636,12 +669,12 @@ struct SettingsView: View {
         return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
     }
 
-    private var dateFormatter: DateFormatter {
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .none
         return formatter
-    }
+    }()
 
     private func testAnthropicConnection(apiKey: String) async -> TestResult {
         do {
@@ -665,9 +698,9 @@ struct SettingsView: View {
                 "max_tokens": 10,
                 "messages": [[
                     "role": "user",
-                    "content": "Reply with 'OK'"
-                ]]
-            ] as [String : Any]
+                    "content": "Reply with 'OK'",
+                ]],
+            ] as [String: Any]
 
             request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 

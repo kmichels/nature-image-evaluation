@@ -5,8 +5,8 @@
 //  Created by Claude Code on 10/28/25.
 //
 
-import SwiftUI
 import CoreData
+import SwiftUI
 import UniformTypeIdentifiers
 
 /// Quick Analysis area for drag-and-drop image evaluation
@@ -18,7 +18,7 @@ struct GalleryView: View {
 
     @FetchRequest(
         sortDescriptors: [
-            NSSortDescriptor(keyPath: \ImageEvaluation.dateAdded, ascending: false)
+            NSSortDescriptor(keyPath: \ImageEvaluation.dateAdded, ascending: false),
         ],
         animation: .default
     )
@@ -28,7 +28,7 @@ struct GalleryView: View {
     init() {
         let request = ImageEvaluation.fetchRequest()
         request.sortDescriptors = [
-            NSSortDescriptor(keyPath: \ImageEvaluation.dateAdded, ascending: false)
+            NSSortDescriptor(keyPath: \ImageEvaluation.dateAdded, ascending: false),
         ]
         request.fetchBatchSize = 20 // Load in batches for better memory management
         request.returnsObjectsAsFaults = true // Don't load all properties immediately
@@ -41,36 +41,19 @@ struct GalleryView: View {
     @State private var isImporting = false
     @State private var isDragOver = false
     @State private var showingEvaluationSheet = false
-    @State private var detailViewImage: ImageEvaluation?  // When non-nil, shows detail view
+    @State private var detailViewImage: ImageEvaluation? // When non-nil, shows detail view
     @State private var searchText = ""
     @State private var sortOption: SortOption = .dateAdded
     @State private var filterOption: FilterOption = .all
     @State private var showingDeleteConfirmation = false
-    @State private var showOnlySelected = false  // Toggle to show only selected images
+    @State private var showOnlySelected = false // Toggle to show only selected images
 
     // Evaluation state
-    @State private var evaluationManager = {
-        let manager = EvaluationManager()
-        // Load saved image resolution preference
-        let savedResolution = UserDefaults.standard.integer(forKey: "imageResolution")
-        if savedResolution > 0 {
-            manager.imageResolution = savedResolution
-        }
-        // Load saved rate limiting preferences
-        let savedDelay = UserDefaults.standard.double(forKey: "requestDelay")
-        if savedDelay > 0 {
-            manager.requestDelay = savedDelay
-        }
-        let savedBatchSize = UserDefaults.standard.integer(forKey: "maxBatchSize")
-        if savedBatchSize > 0 {
-            manager.maxBatchSize = savedBatchSize
-        }
-        return manager
-    }()
+    @State private var evaluationManager = EvaluationManager.withSavedPreferences()
 
     // Grid layout
     private let columns = [
-        GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 20)
+        GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 20),
     ]
 
     enum SortOption: String, CaseIterable {
@@ -112,7 +95,7 @@ struct GalleryView: View {
             case .failed:
                 // Failed = attempted evaluation but no successful result
                 return evaluation.dateLastEvaluated != nil &&
-                       (evaluation.currentEvaluation == nil ||
+                    (evaluation.currentEvaluation == nil ||
                         evaluation.currentEvaluation?.evaluationStatus == "failed")
             case .portfolio:
                 return evaluation.currentEvaluation?.primaryPlacement == "PORTFOLIO"
@@ -174,7 +157,7 @@ struct GalleryView: View {
                 .environment(\.managedObjectContext, viewContext)
         }
         .alert("Delete Images", isPresented: $showingDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { }
+            Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) {
                 deleteSelectedImages()
             }
@@ -206,6 +189,7 @@ struct GalleryView: View {
     }
 
     // MARK: - Computed Properties
+
     private var filteredImages: [ImageEvaluation] {
         let baseImages = showOnlySelected ? Array(selectedImages) : Array(imageEvaluations)
 
@@ -218,8 +202,8 @@ struct GalleryView: View {
     private var failedImages: [ImageEvaluation] {
         imageEvaluations.filter { evaluation in
             evaluation.dateLastEvaluated != nil &&
-            (evaluation.currentEvaluation == nil ||
-             evaluation.currentEvaluation?.evaluationStatus == "failed")
+                (evaluation.currentEvaluation == nil ||
+                    evaluation.currentEvaluation?.evaluationStatus == "failed")
         }
     }
 
@@ -247,7 +231,7 @@ struct GalleryView: View {
                 result.primaryPlacement,
                 result.strengths?.joined(separator: " "),
                 result.improvements?.joined(separator: " "),
-                result.marketComparison
+                result.marketComparison,
             ].compactMap { $0 }.joined(separator: " ").lowercased()
 
             return searchableText.contains(searchLower)
@@ -272,7 +256,6 @@ struct GalleryView: View {
             allIDs: allIDs
         )
     }
-
 
     private func isImageBeingEvaluated(_ evaluation: ImageEvaluation) -> Bool {
         guard evaluationManager.isProcessing else { return false }
@@ -390,9 +373,10 @@ struct GalleryView: View {
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         for provider in providers {
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { (item, error) in
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
                 guard let data = item as? Data,
-                      let url = URL(dataRepresentation: data, relativeTo: nil) else {
+                      let url = URL(dataRepresentation: data, relativeTo: nil)
+                else {
                     return
                 }
 
@@ -406,11 +390,11 @@ struct GalleryView: View {
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
         switch result {
-        case .success(let urls):
+        case let .success(urls):
             Task {
                 await importImageURLs(urls)
             }
-        case .failure(let error):
+        case let .failure(error):
             print("Import error: \(error)")
         }
     }
@@ -461,115 +445,10 @@ struct ImageThumbnailView: View {
                     .foregroundStyle(isSelected ? .blue : .white)
                     .background(Circle().fill(.black.opacity(0.5)))
                     .padding(8)
-
             }
-            .overlay(alignment: .center) {
-                // Evaluation status overlay
-                if isBeingEvaluated {
-                    ZStack {
-                        Rectangle()
-                            .fill(.black.opacity(0.6))
-
-                        VStack(spacing: 8) {
-                            ProgressView()
-                                .controlSize(.regular)
-                                .progressViewStyle(CircularProgressViewStyle())
-
-                            Text("Evaluating...")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.white)
-                        }
-                        .padding(.bottom, 20) // Adjust for badge space
-                    }
-                } else if isInQueue {
-                    ZStack {
-                        Rectangle()
-                            .fill(.black.opacity(0.4))
-
-                        VStack(spacing: 8) {
-                            Image(systemName: "clock.fill")
-                                .font(.title2)
-                                .foregroundStyle(.white.opacity(0.9))
-
-                            Text("Queued")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.9))
-                        }
-                        .padding(.bottom, 20) // Adjust for badge space
-                    }
-                }
-            }
-            .overlay(alignment: .bottomLeading) {
-                // Commercial Metadata Indicator (bottom left) - show for STORE/BOTH placement
-                if let result = evaluation.currentEvaluation,
-                   result.title != nil,
-                   (result.primaryPlacement == "STORE" || result.primaryPlacement == "BOTH") {
-                    Image(systemName: "tag.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.white)
-                        .padding(4)
-                        .background(Circle().fill(Color.green.opacity(0.9)))
-                        .padding(8)
-                }
-
-            }
-            .overlay(alignment: .bottomTrailing) {
-                // Evaluation Badge
-                if let result = evaluation.currentEvaluation {
-                    VStack(spacing: 2) {
-                        // Show artistic and commercial scores
-                        HStack(spacing: 4) {
-                            // Artistic score
-                            VStack(spacing: 1) {
-                                Text("A")
-                                    .font(.system(size: 8))
-                                Text(String(format: "%.1f", result.artisticScore))
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                            .frame(width: 28)
-
-                            Divider()
-                                .frame(height: 20)
-
-                            // Commercial score
-                            VStack(spacing: 1) {
-                                Text("C")
-                                    .font(.system(size: 8))
-                                Text(String(format: "%.1f", result.sellabilityScore))
-                                    .font(.system(size: 11, weight: .bold))
-                            }
-                            .frame(width: 28)
-                        }
-                        .foregroundStyle(.white)
-
-                        if let placement = result.primaryPlacement {
-                            Text(placement)
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                        }
-                    }
-                    .padding(4)
-                    .background(scoreColor.opacity(0.9))
-                    .cornerRadius(4)
-                    .padding(8)
-                } else if evaluation.dateLastEvaluated != nil &&
-                         (evaluation.currentEvaluation == nil ||
-                          evaluation.currentEvaluation?.evaluationStatus == "failed") {
-                    // Show failed evaluation badge
-                    VStack(spacing: 2) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 16))
-                        Text("FAILED")
-                            .font(.system(size: 9, weight: .bold))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(6)
-                    .background(Color.red.opacity(0.9))
-                    .cornerRadius(4)
-                    .padding(8)
-                }
-            }
+            .overlay(alignment: .center) { evaluationStatusOverlay }
+            .overlay(alignment: .bottomLeading) { commercialMetadataIndicator }
+            .overlay(alignment: .bottomTrailing) { evaluationBadge }
 
             // Filename
             Text(filename)
@@ -636,26 +515,119 @@ struct ImageThumbnailView: View {
         }
     }
 
-    private var scoreColor: Color {
-        guard let score = evaluation.currentEvaluation?.overallWeightedScore else {
-            return .gray
-        }
+    // MARK: - Overlay Views
 
-        switch score {
-        case 8...:
-            return .green
-        case 6..<8:
-            return .blue
-        case 4..<6:
-            return .orange
-        default:
-            return .red
+    @ViewBuilder
+    private var evaluationStatusOverlay: some View {
+        if isBeingEvaluated {
+            ZStack {
+                Rectangle()
+                    .fill(.black.opacity(0.6))
+
+                VStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.regular)
+                        .progressViewStyle(CircularProgressViewStyle())
+
+                    Text("Evaluating...")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.white)
+                }
+                .padding(.bottom, 20)
+            }
+        } else if isInQueue {
+            ZStack {
+                Rectangle()
+                    .fill(.black.opacity(0.4))
+
+                VStack(spacing: 8) {
+                    Image(systemName: "clock.fill")
+                        .font(.title2)
+                        .foregroundStyle(.white.opacity(0.9))
+
+                    Text("Queued")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+                .padding(.bottom, 20)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var commercialMetadataIndicator: some View {
+        if let result = evaluation.currentEvaluation,
+           result.title != nil,
+           result.primaryPlacement == "STORE" || result.primaryPlacement == "BOTH"
+        {
+            Image(systemName: "tag.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(.white)
+                .padding(4)
+                .background(Circle().fill(Color.green.opacity(0.9)))
+                .padding(8)
+        }
+    }
+
+    @ViewBuilder
+    private var evaluationBadge: some View {
+        if let result = evaluation.currentEvaluation {
+            VStack(spacing: 2) {
+                HStack(spacing: 4) {
+                    VStack(spacing: 1) {
+                        Text("A")
+                            .font(.system(size: 8))
+                        Text(String(format: "%.1f", result.artisticScore))
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .frame(width: 28)
+
+                    Divider()
+                        .frame(height: 20)
+
+                    VStack(spacing: 1) {
+                        Text("C")
+                            .font(.system(size: 8))
+                        Text(String(format: "%.1f", result.sellabilityScore))
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .frame(width: 28)
+                }
+                .foregroundStyle(.white)
+
+                if let placement = result.primaryPlacement {
+                    Text(placement)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.white)
+                }
+            }
+            .padding(4)
+            .background(scoreColor(result.overallWeightedScore).opacity(0.9))
+            .cornerRadius(4)
+            .padding(8)
+        } else if evaluation.dateLastEvaluated != nil &&
+            (evaluation.currentEvaluation == nil ||
+                evaluation.currentEvaluation?.evaluationStatus == "failed")
+        {
+            VStack(spacing: 2) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 16))
+                Text("FAILED")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .foregroundStyle(.white)
+            .padding(6)
+            .background(Color.red.opacity(0.9))
+            .cornerRadius(4)
+            .padding(8)
         }
     }
 
     private func loadThumbnail() {
         if let thumbnailData = evaluation.thumbnailData,
-           let image = NSImage(data: thumbnailData) {
+           let image = NSImage(data: thumbnailData)
+        {
             thumbnailImage = image
         }
     }
@@ -704,13 +676,16 @@ struct EvaluationProgressView: View {
 
     private var statusColor: Color {
         if manager.statusMessage.lowercased().contains("failed") ||
-           manager.statusMessage.lowercased().contains("error") {
+            manager.statusMessage.lowercased().contains("error")
+        {
             return .red
         } else if manager.statusMessage.lowercased().contains("overloaded") ||
-                  manager.statusMessage.lowercased().contains("waiting") {
+            manager.statusMessage.lowercased().contains("waiting")
+        {
             return .orange
         } else if manager.statusMessage.lowercased().contains("successful") ||
-                  manager.statusMessage.lowercased().contains("complete") {
+            manager.statusMessage.lowercased().contains("complete")
+        {
             return .green
         } else {
             return .primary

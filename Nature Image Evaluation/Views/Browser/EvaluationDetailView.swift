@@ -384,15 +384,6 @@ struct EvaluationDetailView: View {
         }.value
     }
 
-    private func scoreColor(_ score: Double) -> Color {
-        switch score {
-        case 8.0...: return .green
-        case 6.0 ..< 8.0: return .blue
-        case 4.0 ..< 6.0: return .orange
-        default: return .red
-        }
-    }
-
     private func placementIcon(_ placement: String?) -> String {
         switch placement {
         case "PORTFOLIO": return "star.fill"

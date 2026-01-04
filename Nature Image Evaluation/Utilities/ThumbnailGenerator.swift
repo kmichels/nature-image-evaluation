@@ -5,9 +5,9 @@
 //  Created by Claude on 11/14/25.
 //
 
-import Foundation
 import AppKit
 import CoreData
+import Foundation
 
 @MainActor
 class ThumbnailGenerator {
@@ -51,69 +51,65 @@ class ThumbnailGenerator {
 
     /// Generate thumbnail from file URL and save to Core Data
     private func generateAndSaveThumbnail(from url: URL, for evaluation: ImageEvaluation, context: NSManagedObjectContext) async -> Data? {
-        // Capture the objectID to avoid Sendable issues
         let evaluationID = evaluation.objectID
 
-        // Use detached task for background processing
         return await Task.detached(priority: .background) {
-            // Use FileHandle for more controlled file access
-            do {
-                // Open file handle with proper error handling
-                let fileHandle = try FileHandle(forReadingFrom: url)
-                defer {
-                    // Always close the file handle
-                    try? fileHandle.close()
-                }
+            guard let imageData = self.readImageData(from: url) else { return nil }
+            guard let thumbnailData = await self.createThumbnailData(from: imageData, url: url) else { return nil }
 
-                // Read data with size limit to prevent memory issues
-                let maxSize: UInt64 = 100_000_000 // 100MB limit
-                let fileSize = try fileHandle.seekToEnd()
-                guard fileSize <= maxSize else {
-                    print("Image file too large for thumbnail generation: \(fileSize) bytes")
-                    return nil
-                }
+            await self.saveThumbnail(thumbnailData, evaluationID: evaluationID, context: context)
+            return thumbnailData
+        }.value
+    }
 
-                try fileHandle.seek(toOffset: 0)
-                let imageData = autoreleasepool {
-                    fileHandle.readDataToEndOfFile()
-                }
+    // MARK: - Thumbnail Generation Helpers
 
-                let thumbnailData = await MainActor.run {
-                    autoreleasepool {
-                        guard let image = NSImage(data: imageData) else {
-                            print("Failed to create image from data: \(url.path)")
-                            return nil as Data?
-                        }
+    /// Read image data from URL with size limit check
+    private nonisolated func readImageData(from url: URL) -> Data? {
+        do {
+            let fileHandle = try FileHandle(forReadingFrom: url)
+            defer { try? fileHandle.close() }
 
-                        // Clear image data reference immediately after creating NSImage
-                        guard let thumbnail = self.imageProcessor.generateThumbnail(image: image) else {
-                            print("Failed to generate thumbnail for: \(url.path)")
-                            return nil as Data?
-                        }
-
-                        return self.imageProcessor.thumbnailToData(thumbnail)
-                    }
-                }
-
-                guard let thumbnailData = thumbnailData else {
-                    return nil
-                }
-
-                // Save to Core Data on the correct context
-                await context.perform {
-                    // Re-fetch the object using the ID
-                    if let evaluation = try? context.existingObject(with: evaluationID) as? ImageEvaluation {
-                        evaluation.thumbnailData = thumbnailData
-                        try? context.save()
-                    }
-                }
-
-                return thumbnailData
-            } catch {
-                print("Error generating thumbnail: \(error)")
+            let maxSize: UInt64 = 100_000_000 // 100MB limit
+            let fileSize = try fileHandle.seekToEnd()
+            guard fileSize <= maxSize else {
+                print("Image file too large for thumbnail generation: \(fileSize) bytes")
                 return nil
             }
-        }.value
+
+            try fileHandle.seek(toOffset: 0)
+            return autoreleasepool { fileHandle.readDataToEndOfFile() }
+        } catch {
+            print("Error reading image file: \(error)")
+            return nil
+        }
+    }
+
+    /// Create thumbnail data from image data
+    private func createThumbnailData(from imageData: Data, url: URL) -> Data? {
+        autoreleasepool {
+            guard let image = NSImage(data: imageData) else {
+                print("Failed to create image from data: \(url.path)")
+                return nil
+            }
+
+            guard let thumbnail = imageProcessor.generateThumbnail(image: image) else {
+                print("Failed to generate thumbnail for: \(url.path)")
+                return nil
+            }
+
+            return imageProcessor.thumbnailToData(thumbnail)
+        }
+    }
+
+    /// Save thumbnail to Core Data
+    private nonisolated func saveThumbnail(_ data: Data, evaluationID: NSManagedObjectID, context: NSManagedObjectContext) async {
+        await context.perform {
+            if let evaluation = try? context.existingObject(with: evaluationID) as? ImageEvaluation {
+                evaluation.thumbnailData = data
+                try? context.save()
+            }
+        }
     }
 
     /// Batch generate thumbnails for multiple evaluations
@@ -124,7 +120,7 @@ class ThumbnailGenerator {
 
         for i in stride(from: 0, to: evaluationsNeedingThumbnails.count, by: batchSize) {
             let endIndex = min(i + batchSize, evaluationsNeedingThumbnails.count)
-            let batch = Array(evaluationsNeedingThumbnails[i..<endIndex])
+            let batch = Array(evaluationsNeedingThumbnails[i ..< endIndex])
 
             // Process batch concurrently
             await withTaskGroup(of: Void.self) { group in

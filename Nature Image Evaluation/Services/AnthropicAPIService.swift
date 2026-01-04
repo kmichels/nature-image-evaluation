@@ -10,7 +10,6 @@ import os.log
 
 /// Anthropic Claude API implementation
 final class AnthropicAPIService: APIProviderProtocol {
-
     let provider: Constants.APIProvider = .anthropic
 
     private let session: URLSession
@@ -37,7 +36,7 @@ final class AnthropicAPIService: APIProviderProtocol {
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
 
-        self.session = URLSession(configuration: configuration)
+        session = URLSession(configuration: configuration)
     }
 
     init(session: URLSession) {
@@ -105,9 +104,9 @@ final class AnthropicAPIService: APIProviderProtocol {
                                 type: "text",
                                 text: prompt
                             )
-                        )
+                        ),
                     ]
-                )
+                ),
             ]
         )
 
@@ -170,8 +169,8 @@ final class AnthropicAPIService: APIProviderProtocol {
         let inputTokensRemaining = (headers["anthropic-ratelimit-input-tokens-remaining"] as? String).flatMap(Int.init)
         let outputTokensRemaining = (headers["anthropic-ratelimit-output-tokens-remaining"] as? String).flatMap(Int.init)
 
-        let requestsReset = (headers["anthropic-ratelimit-requests-reset"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) }
-        let tokensReset = (headers["anthropic-ratelimit-tokens-reset"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) }
+        let requestsReset = (headers["anthropic-ratelimit-requests-reset"] as? String).flatMap { Formatters.iso8601.date(from: $0) }
+        let tokensReset = (headers["anthropic-ratelimit-tokens-reset"] as? String).flatMap { Formatters.iso8601.date(from: $0) }
 
         let retryAfter = (headers["retry-after"] as? String).flatMap(TimeInterval.init)
 
@@ -189,7 +188,7 @@ final class AnthropicAPIService: APIProviderProtocol {
 
     private func performRequestWithRetry(
         request: URLRequest,
-        apiKey: String,
+        apiKey _: String,
         maxRetries: Int? = nil
     ) async throws -> EvaluationResponse {
         let retryLimit = maxRetries ?? Constants.maxNetworkRetries
@@ -203,32 +202,30 @@ final class AnthropicAPIService: APIProviderProtocol {
                     throw APIError.invalidResponse
                 }
 
-                // Check for rate limit
+                // Handle rate limit (429)
                 if httpResponse.statusCode == 429 {
-                    let rateLimitInfo = extractRateLimitInfo(from: httpResponse)
-                    let retryAfter = rateLimitInfo?.retryAfter ?? Constants.rateLimitBackoffSeconds
-
-                    if currentRetry < retryLimit - 1 {
-                        AppLogger.api.warning("⏳ Rate limit hit. Waiting \(retryAfter) seconds before retry...")
-                        try await Task.sleep(nanoseconds: UInt64(retryAfter * 1_000_000_000))
+                    let shouldRetry = try await handleRateLimit(
+                        response: httpResponse,
+                        currentRetry: currentRetry,
+                        retryLimit: retryLimit
+                    )
+                    if shouldRetry {
                         currentRetry += 1
                         continue
-                    } else {
-                        throw APIError.rateLimitExceeded(retryAfter: retryAfter)
                     }
                 }
 
-                // Check for authentication error
+                // Handle authentication error (401)
                 if httpResponse.statusCode == 401 {
                     throw APIError.authenticationFailed
                 }
 
-                // Check for success
+                // Handle success (200)
                 if httpResponse.statusCode == 200 {
                     return try parseResponse(data)
                 }
 
-                // Handle other errors
+                // Handle other API errors
                 if let errorResponse = try? decoder.decode(AnthropicErrorResponse.self, from: data) {
                     throw APIError.providerSpecificError(errorResponse.error.message)
                 }
@@ -238,47 +235,12 @@ final class AnthropicAPIService: APIProviderProtocol {
             } catch let error as APIError {
                 throw error
             } catch {
-                // Check for timeout error
-                if let nsError = error as NSError?,
-                   nsError.domain == NSURLErrorDomain {
-                    switch nsError.code {
-                    case NSURLErrorTimedOut:
-                        print("Request timed out after \(Constants.networkRequestTimeout) seconds")
-                        throw APIError.networkError(NSError(
-                            domain: NSURLErrorDomain,
-                            code: NSURLErrorTimedOut,
-                            userInfo: [
-                                NSLocalizedDescriptionKey: "Request timed out. The server took too long to respond. Please try again or check your internet connection."
-                            ]
-                        ))
-
-                    case NSURLErrorCannotFindHost:
-                        print("DNS resolution failed. This may be a macOS sandbox issue.")
-                        print("Error details: \(sanitizeError(nsError))")
-                        throw APIError.networkError(NSError(
-                            domain: NSURLErrorDomain,
-                            code: NSURLErrorCannotFindHost,
-                            userInfo: [
-                                NSLocalizedDescriptionKey: "Cannot resolve api.anthropic.com. This may be a macOS sandbox DNS issue. Try restarting the app or check your network settings."
-                            ]
-                        ))
-
-                    case NSURLErrorNotConnectedToInternet:
-                        throw APIError.networkError(NSError(
-                            domain: NSURLErrorDomain,
-                            code: NSURLErrorNotConnectedToInternet,
-                            userInfo: [
-                                NSLocalizedDescriptionKey: "No internet connection. Please check your network settings and try again."
-                            ]
-                        ))
-
-                    default:
-                        break
-                    }
+                // Handle network errors with potential retry
+                if let networkError = mapNetworkError(error) {
+                    throw networkError
                 }
 
                 if currentRetry < retryLimit - 1 {
-                    // Exponential backoff for network errors
                     let backoffTime = TimeInterval(pow(2.0, Double(currentRetry)))
                     print("Network error. Retrying in \(backoffTime) seconds...")
                     try await Task.sleep(nanoseconds: UInt64(backoffTime * 1_000_000_000))
@@ -292,6 +254,67 @@ final class AnthropicAPIService: APIProviderProtocol {
         throw APIError.providerSpecificError("Max retries exceeded")
     }
 
+    /// Handle rate limit response, returns true if should retry
+    private func handleRateLimit(
+        response: HTTPURLResponse,
+        currentRetry: Int,
+        retryLimit: Int
+    ) async throws -> Bool {
+        let rateLimitInfo = extractRateLimitInfo(from: response)
+        let retryAfter = rateLimitInfo?.retryAfter ?? Constants.rateLimitBackoffSeconds
+
+        if currentRetry < retryLimit - 1 {
+            AppLogger.api.warning("⏳ Rate limit hit. Waiting \(retryAfter) seconds before retry...")
+            try await Task.sleep(nanoseconds: UInt64(retryAfter * 1_000_000_000))
+            return true
+        }
+        throw APIError.rateLimitExceeded(retryAfter: retryAfter)
+    }
+
+    /// Map NSURLError codes to user-friendly APIError messages
+    private func mapNetworkError(_ error: Error) -> APIError? {
+        guard let nsError = error as NSError?,
+              nsError.domain == NSURLErrorDomain
+        else {
+            return nil
+        }
+
+        switch nsError.code {
+        case NSURLErrorTimedOut:
+            print("Request timed out after \(Constants.networkRequestTimeout) seconds")
+            return APIError.networkError(makeNetworkError(
+                code: NSURLErrorTimedOut,
+                message: "Request timed out. The server took too long to respond. Please try again or check your internet connection."
+            ))
+
+        case NSURLErrorCannotFindHost:
+            print("DNS resolution failed. This may be a macOS sandbox issue.")
+            print("Error details: \(sanitizeError(nsError))")
+            return APIError.networkError(makeNetworkError(
+                code: NSURLErrorCannotFindHost,
+                message: "Cannot resolve api.anthropic.com. This may be a macOS sandbox DNS issue. Try restarting the app or check your network settings."
+            ))
+
+        case NSURLErrorNotConnectedToInternet:
+            return APIError.networkError(makeNetworkError(
+                code: NSURLErrorNotConnectedToInternet,
+                message: "No internet connection. Please check your network settings and try again."
+            ))
+
+        default:
+            return nil
+        }
+    }
+
+    /// Create a standardized NSError for network issues
+    private func makeNetworkError(code: Int, message: String) -> NSError {
+        NSError(
+            domain: NSURLErrorDomain,
+            code: code,
+            userInfo: [NSLocalizedDescriptionKey: message]
+        )
+    }
+
     private func validateScores(_ data: EvaluationData) throws {
         // Validate all scores are within 0-10 range
         let scores = [
@@ -299,7 +322,7 @@ final class AnthropicAPIService: APIProviderProtocol {
             ("Quality", data.qualityScore),
             ("Sellability", data.sellabilityScore),
             ("Artistic", data.artisticScore),
-            ("Overall", data.overallWeightedScore)
+            ("Overall", data.overallWeightedScore),
         ]
 
         for (name, score) in scores {
@@ -335,7 +358,8 @@ final class AnthropicAPIService: APIProviderProtocol {
         // Use non-greedy pattern to get first complete JSON object
         let jsonPattern = #"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}"#
         guard let range = content.range(of: jsonPattern, options: .regularExpression),
-              let jsonData = String(content[range]).data(using: .utf8) else {
+              let jsonData = String(content[range]).data(using: .utf8)
+        else {
             throw APIError.parsingFailed("Could not extract JSON from response")
         }
 
@@ -374,9 +398,9 @@ private enum MessageContent: Encodable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         switch self {
-        case .text(let content):
+        case let .text(content):
             try container.encode(content)
-        case .image(let content):
+        case let .image(content):
             try container.encode(content)
         }
     }

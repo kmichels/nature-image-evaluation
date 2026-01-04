@@ -6,79 +6,79 @@
 //  Uses Core Image and Vision frameworks for local analysis
 //
 
-import Foundation
-import CoreImage
-import Vision
 import AppKit
-import Metal
 import Combine
+import CoreImage
+import Foundation
+import Metal
+import Vision
 
 /// Types of blur detected in images
 enum BlurType: String {
-    case none = "none"
-    case motion = "motion"          // Directional blur from camera/subject movement
-    case gaussian = "gaussian"      // Uniform soft focus
-    case lens = "lens"              // Bokeh/depth of field
-    case mixed = "mixed"            // Multiple blur types present
+    case none
+    case motion // Directional blur from camera/subject movement
+    case gaussian // Uniform soft focus
+    case lens // Bokeh/depth of field
+    case mixed // Multiple blur types present
 }
 
 /// Probable artistic techniques detected
 enum ArtisticTechnique: String {
-    case shallowDOF = "shallow_dof"           // Portrait/macro style
-    case motionBlur = "motion_blur"           // Panning, ICM
-    case longExposure = "long_exposure"       // Smooth water/clouds
-    case softFocus = "soft_focus"             // Dreamy/ethereal
+    case shallowDOF = "shallow_dof" // Portrait/macro style
+    case motionBlur = "motion_blur" // Panning, ICM
+    case longExposure = "long_exposure" // Smooth water/clouds
+    case softFocus = "soft_focus" // Dreamy/ethereal
     case multipleExposure = "multiple_exposure" // Artistic overlay
-    case tiltShift = "tilt_shift"             // Miniature effect
-    case ortonEffect = "orton_effect"         // Glow with maintained contrast
-    case none = "none"
+    case tiltShift = "tilt_shift" // Miniature effect
+    case ortonEffect = "orton_effect" // Glow with maintained contrast
+    case none
 }
 
 /// Focus distribution across the image
 struct FocusMap {
-    let sharpRegions: [CGRect]      // Areas in focus
-    let sharpnessPercentage: Float  // Overall percentage of sharp areas
-    let centerSharpness: Float      // Sharpness at image center
-    let edgeSharpness: Float        // Average sharpness at edges
-    let distribution: String         // "center-weighted", "edge-focused", "uniform", "selective"
+    let sharpRegions: [CGRect] // Areas in focus
+    let sharpnessPercentage: Float // Overall percentage of sharp areas
+    let centerSharpness: Float // Sharpness at image center
+    let edgeSharpness: Float // Average sharpness at edges
+    let distribution: String // "center-weighted", "edge-focused", "uniform", "selective"
 }
 
 /// Depth of field characteristics
 struct DOFCharacteristics {
-    let estimatedAperture: String?  // e.g., "f/1.4 - f/2.8" based on blur characteristics
-    let bokehQuality: Float         // 0-1, quality of out-of-focus areas
-    let subjectIsolation: Float     // 0-1, how well subject stands out
+    let estimatedAperture: String? // e.g., "f/1.4 - f/2.8" based on blur characteristics
+    let bokehQuality: Float // 0-1, quality of out-of-focus areas
+    let subjectIsolation: Float // 0-1, how well subject stands out
 }
 
 /// Exposure analysis results
 struct ExposureAnalysis {
-    let averageEV: Float            // Exposure value relative to ideal
-    let highlightsClipped: Float    // Percentage of blown highlights
-    let shadowsClipped: Float       // Percentage of blocked shadows
-    let dynamicRange: Float         // Utilized dynamic range (0-1)
-    let distribution: String        // "low-key", "high-key", "balanced", "contrasty"
+    let averageEV: Float // Exposure value relative to ideal
+    let highlightsClipped: Float // Percentage of blown highlights
+    let shadowsClipped: Float // Percentage of blocked shadows
+    let dynamicRange: Float // Utilized dynamic range (0-1)
+    let distribution: String // "low-key", "high-key", "balanced", "contrasty"
 }
 
 /// Objective technical measurements
 struct TechnicalMetrics {
-    let sharpnessScore: Float       // 0-10 overall sharpness
-    let sharpnessMap: FocusMap     // Detailed focus distribution
-    let blurType: BlurType          // Type of blur detected
-    let blurAmount: Float           // 0-1 blur intensity
-    let noiseLevel: Float           // 0-1 noise amount
-    let contrastRatio: Float        // Dynamic range utilization
-    let exposure: ExposureAnalysis  // Exposure characteristics
-    let colorSaturation: Float      // 0-1 saturation level
-    let dominantColors: [NSColor]   // Main colors in image
-    let isMonochrome: Bool          // B&W or color
+    let sharpnessScore: Float // 0-10 overall sharpness
+    let sharpnessMap: FocusMap // Detailed focus distribution
+    let blurType: BlurType // Type of blur detected
+    let blurAmount: Float // 0-1 blur intensity
+    let noiseLevel: Float // 0-1 noise amount
+    let contrastRatio: Float // Dynamic range utilization
+    let exposure: ExposureAnalysis // Exposure characteristics
+    let colorSaturation: Float // 0-1 saturation level
+    let dominantColors: [NSColor] // Main colors in image
+    let isMonochrome: Bool // B&W or color
     let depthOfField: DOFCharacteristics
 }
 
 /// Artistic intent indicators
 struct ArtisticIntent {
     let probableTechnique: ArtisticTechnique
-    let confidence: Float           // 0-1 confidence in detection
-    let isLikelyIntentional: Bool   // Whether "flaws" appear intentional
+    let confidence: Float // 0-1 confidence in detection
+    let isLikelyIntentional: Bool // Whether "flaws" appear intentional
     let supportingEvidence: [String] // Reasons for the assessment
 }
 
@@ -86,9 +86,9 @@ struct ArtisticIntent {
 struct TechnicalAnalysisResult {
     let metrics: TechnicalMetrics
     let intent: ArtisticIntent
-    let saliencyMap: CIImage?       // Visual attention map
-    let histogram: [Int]             // Luminance histogram
-    let analysisTime: TimeInterval  // Time taken to analyze
+    let saliencyMap: CIImage? // Visual attention map
+    let histogram: [Int] // Luminance histogram
+    let analysisTime: TimeInterval // Time taken to analyze
 }
 
 /// Analyzes images for technical metrics without making quality judgments
@@ -112,6 +112,49 @@ class TechnicalAnalyzer: ObservableObject {
         } else {
             ciContext = CIContext(options: [.useSoftwareRenderer: false])
         }
+    }
+
+    // MARK: - Image Processing Helpers
+
+    /// Downscale image if larger than maxDimension for performance
+    private func downscaleIfNeeded(_ image: CIImage, maxDimension: CGFloat) -> CIImage {
+        guard image.extent.width > maxDimension || image.extent.height > maxDimension else {
+            return image
+        }
+        let scale = min(maxDimension / image.extent.width, maxDimension / image.extent.height)
+        return image.applyingFilter("CILanczosScaleTransform", parameters: [
+            "inputScale": scale,
+            "inputAspectRatio": 1.0,
+        ])
+    }
+
+    /// Sample a single pixel at given coordinates
+    private func samplePixel(from image: CIImage, at point: CGPoint) -> (r: Float, g: Float, b: Float) {
+        var pixel = [UInt8](repeating: 0, count: 4)
+        ciContext.render(image,
+                         toBitmap: &pixel,
+                         rowBytes: 4,
+                         bounds: CGRect(x: point.x, y: point.y, width: 1, height: 1),
+                         format: .RGBA8,
+                         colorSpace: CGColorSpaceCreateDeviceRGB())
+        return (Float(pixel[0]) / 255.0, Float(pixel[1]) / 255.0, Float(pixel[2]) / 255.0)
+    }
+
+    /// Sample multiple random pixels from an image
+    private func sampleRandomPixels(from image: CIImage, count: Int) -> [(r: Float, g: Float, b: Float)] {
+        let extent = image.extent
+        guard extent.width > 0, extent.height > 0 else { return [] }
+
+        return (0 ..< count).map { _ in
+            let x = CGFloat.random(in: 0 ..< extent.width)
+            let y = CGFloat.random(in: 0 ..< extent.height)
+            return samplePixel(from: image, at: CGPoint(x: x, y: y))
+        }
+    }
+
+    /// Calculate luminance from RGB values using standard weights
+    private func luminance(r: Float, g: Float, b: Float) -> Float {
+        r * 0.299 + g * 0.587 + b * 0.114
     }
 
     // MARK: - Public Methods
@@ -195,27 +238,18 @@ class TechnicalAnalyzer: ObservableObject {
     // MARK: - Sharpness Analysis
 
     private func calculateSharpness(from image: CIImage) -> Float {
-        // Downsample image if it's too large for histogram analysis (max 32768 pixels)
-        let maxDimension: CGFloat = 2048  // Safe size that won't exceed histogram limits
-        var workingImage = image
-
-        if image.extent.width > maxDimension || image.extent.height > maxDimension {
-            let scale = min(maxDimension / image.extent.width, maxDimension / image.extent.height)
-            workingImage = image.applyingFilter("CILanczosScaleTransform", parameters: [
-                "inputScale": scale,
-                "inputAspectRatio": 1.0
-            ])
-        }
+        // Downsample image if it's too large for histogram analysis
+        let workingImage = downscaleIfNeeded(image, maxDimension: 2048)
 
         // Convert to grayscale first for better edge detection
         let grayscale = workingImage.applyingFilter("CIColorControls", parameters: [
-            "inputSaturation": 0
+            "inputSaturation": 0,
         ])
 
         // Apply Sobel edge detection which is more reliable than CIEdges
         let convolution = grayscale.applyingFilter("CIConvolution3X3", parameters: [
             "inputWeights": CIVector(values: [-1, 0, 1, -2, 0, 2, -1, 0, 1], count: 9),
-            "inputBias": 0.5
+            "inputBias": 0.5,
         ])
 
         // IMPORTANT: Convolution filters can create infinite extents, we must crop to original bounds
@@ -236,18 +270,18 @@ class TechnicalAnalyzer: ObservableObject {
         // Sample histogram to get edge strength distribution
         var histData = [Float](repeating: 0, count: 64 * 4) // 64 pixels * 4 channels
         ciContext.render(histogramOutput,
-                        toBitmap: &histData,
-                        rowBytes: 64 * 16, // 64 pixels * 16 bytes per pixel (4 floats * 4 bytes)
-                        bounds: CGRect(x: 0, y: 0, width: 64, height: 1),
-                        format: .RGBAf,
-                        colorSpace: nil)
+                         toBitmap: &histData,
+                         rowBytes: 64 * 16, // 64 pixels * 16 bytes per pixel (4 floats * 4 bytes)
+                         bounds: CGRect(x: 0, y: 0, width: 64, height: 1),
+                         format: .RGBAf,
+                         colorSpace: nil)
 
         // Calculate weighted edge strength
         // Higher bins = stronger edges = sharper image
         var totalWeight: Float = 0
         var weightedSum: Float = 0
 
-        for i in 0..<64 {
+        for i in 0 ..< 64 {
             // Read the red channel value (every 4th value starting at index i*4)
             let binValue = histData[i * 4]
             let binPosition = Float(i) / 64.0
@@ -281,8 +315,8 @@ class TechnicalAnalyzer: ObservableObject {
         var edgeSharpness: Float = 0
         var edgeCount = 0
 
-        for row in 0..<gridSize {
-            for col in 0..<gridSize {
+        for row in 0 ..< gridSize {
+            for col in 0 ..< gridSize {
                 let x = extent.minX + CGFloat(col) * cellWidth
                 let y = extent.minY + CGFloat(row) * cellHeight
                 let cellRect = CGRect(x: x, y: y, width: cellWidth, height: cellHeight)
@@ -299,7 +333,7 @@ class TechnicalAnalyzer: ObservableObject {
 
                 // Track center vs edge sharpness
                 let isCenter = (row >= 3 && row <= 6 && col >= 3 && col <= 6)
-                let isEdge = (row == 0 || row == gridSize-1 || col == 0 || col == gridSize-1)
+                let isEdge = (row == 0 || row == gridSize - 1 || col == 0 || col == gridSize - 1)
 
                 if isCenter {
                     centerSharpness = max(centerSharpness, cellSharpness)
@@ -366,21 +400,12 @@ class TechnicalAnalyzer: ObservableObject {
 
     private func estimateNoise(from image: CIImage) -> Float {
         // Downsample for performance if image is large
-        let maxDimension: CGFloat = 1024
-        var workingImage = image
-
-        if image.extent.width > maxDimension || image.extent.height > maxDimension {
-            let scale = min(maxDimension / image.extent.width, maxDimension / image.extent.height)
-            workingImage = image.applyingFilter("CILanczosScaleTransform", parameters: [
-                "inputScale": scale,
-                "inputAspectRatio": 1.0
-            ])
-        }
+        let workingImage = downscaleIfNeeded(image, maxDimension: 1024)
 
         // Use a high-pass filter to isolate noise
         let noiseReduction = workingImage.applyingFilter("CINoiseReduction", parameters: [
             "inputNoiseLevel": 0.02,
-            "inputSharpness": 0.4
+            "inputSharpness": 0.4,
         ])
 
         // Calculate difference between original and denoised to estimate noise
@@ -390,62 +415,25 @@ class TechnicalAnalyzer: ObservableObject {
 
         guard let diffImage = difference.outputImage else { return 0.1 }
 
-        // Sample the difference image
-        let sampleCount = 100
-        var noiseSum: Float = 0
-        let extent = diffImage.extent
+        // Sample the difference image and calculate average luminance difference
+        let samples = sampleRandomPixels(from: diffImage, count: 100)
+        guard !samples.isEmpty else { return 0.1 }
 
-        for _ in 0..<sampleCount {
-            let x = CGFloat.random(in: 0..<extent.width)
-            let y = CGFloat.random(in: 0..<extent.height)
-
-            var pixel = [UInt8](repeating: 0, count: 4)
-            ciContext.render(diffImage,
-                           toBitmap: &pixel,
-                           rowBytes: 4,
-                           bounds: CGRect(x: x, y: y, width: 1, height: 1),
-                           format: .RGBA8,
-                           colorSpace: CGColorSpaceCreateDeviceRGB())
-
-            // Calculate luminance difference
-            let luminance = (Float(pixel[0]) + Float(pixel[1]) + Float(pixel[2])) / (3.0 * 255.0)
-            noiseSum += luminance
+        let noiseSum = samples.reduce(Float(0)) { sum, pixel in
+            sum + (pixel.r + pixel.g + pixel.b) / 3.0
         }
-
-        let noiseLevel = noiseSum / Float(sampleCount)
+        let noiseLevel = noiseSum / Float(samples.count)
 
         // Map to 0-1 scale where 0 is no noise, 1 is extreme noise
         return min(1.0, noiseLevel * 10)
     }
 
     private func calculateContrast(from image: CIImage) -> Float {
-        // Calculate histogram statistics for contrast estimation
-        let extent = image.extent
-        guard extent.width > 0 && extent.height > 0 else { return 1.0 }
-
         // Sample luminance values
-        let sampleCount = 200
-        var luminanceValues: [Float] = []
+        let samples = sampleRandomPixels(from: image, count: 200)
+        guard !samples.isEmpty else { return 1.0 }
 
-        for _ in 0..<sampleCount {
-            let x = CGFloat.random(in: 0..<extent.width)
-            let y = CGFloat.random(in: 0..<extent.height)
-
-            var pixel = [UInt8](repeating: 0, count: 4)
-            ciContext.render(image,
-                           toBitmap: &pixel,
-                           rowBytes: 4,
-                           bounds: CGRect(x: x, y: y, width: 1, height: 1),
-                           format: .RGBA8,
-                           colorSpace: CGColorSpaceCreateDeviceRGB())
-
-            // Calculate luminance
-            let r = Float(pixel[0]) / 255.0
-            let g = Float(pixel[1]) / 255.0
-            let b = Float(pixel[2]) / 255.0
-            let luminance = r * 0.299 + g * 0.587 + b * 0.114
-            luminanceValues.append(luminance)
-        }
+        let luminanceValues = samples.map { luminance(r: $0.r, g: $0.g, b: $0.b) }
 
         // Calculate standard deviation as measure of contrast
         let mean = luminanceValues.reduce(0, +) / Float(luminanceValues.count)
@@ -461,23 +449,12 @@ class TechnicalAnalyzer: ObservableObject {
 
     private func analyzeExposure(from image: CIImage) -> ExposureAnalysis {
         // Sample image to analyze brightness distribution
-        let sampleCount = 200
-        var luminanceValues: [Float] = []
+        let samples = sampleRandomPixels(from: image, count: 200)
+        let luminanceValues = samples.map { luminance(r: $0.r, g: $0.g, b: $0.b) }
 
-        for _ in 0..<sampleCount {
-            let x = CGFloat.random(in: 0..<image.extent.width)
-            let y = CGFloat.random(in: 0..<image.extent.height)
-
-            var pixel = [UInt8](repeating: 0, count: 4)
-            ciContext.render(image,
-                           toBitmap: &pixel,
-                           rowBytes: 4,
-                           bounds: CGRect(x: x, y: y, width: 1, height: 1),
-                           format: .RGBA8,
-                           colorSpace: CGColorSpaceCreateDeviceRGB())
-
-            let luminance = (Float(pixel[0]) * 0.299 + Float(pixel[1]) * 0.587 + Float(pixel[2]) * 0.114) / 255.0
-            luminanceValues.append(luminance)
+        guard !luminanceValues.isEmpty else {
+            return ExposureAnalysis(averageEV: 0, highlightsClipped: 0, shadowsClipped: 0,
+                                    dynamicRange: 0, distribution: "unknown")
         }
 
         // Calculate statistics
@@ -514,28 +491,17 @@ class TechnicalAnalyzer: ObservableObject {
 
     private func analyzeColors(from image: CIImage) -> (Float, [NSColor], Bool) {
         // Sample colors from the image
+        let samples = sampleRandomPixels(from: image, count: 50)
+        guard !samples.isEmpty else { return (0, [], true) }
+
+        // Convert samples to NSColors and calculate saturation
         var colors: [NSColor] = []
         var saturationSum: Float = 0
-        let sampleCount = 50
 
-        for _ in 0..<sampleCount {
-            let x = CGFloat.random(in: 0..<image.extent.width)
-            let y = CGFloat.random(in: 0..<image.extent.height)
+        for sample in samples {
+            let color = NSColor(red: CGFloat(sample.r), green: CGFloat(sample.g),
+                                blue: CGFloat(sample.b), alpha: 1.0)
 
-            var pixel = [UInt8](repeating: 0, count: 4)
-            ciContext.render(image,
-                           toBitmap: &pixel,
-                           rowBytes: 4,
-                           bounds: CGRect(x: x, y: y, width: 1, height: 1),
-                           format: .RGBA8,
-                           colorSpace: CGColorSpaceCreateDeviceRGB())
-
-            let color = NSColor(red: CGFloat(pixel[0])/255.0,
-                               green: CGFloat(pixel[1])/255.0,
-                               blue: CGFloat(pixel[2])/255.0,
-                               alpha: 1.0)
-
-            // Calculate saturation
             var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0
             color.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: nil)
             saturationSum += Float(saturation)
@@ -543,24 +509,15 @@ class TechnicalAnalyzer: ObservableObject {
             colors.append(color)
         }
 
-        let avgSaturation = saturationSum / Float(sampleCount)
+        let avgSaturation = saturationSum / Float(samples.count)
         let isMonochrome = avgSaturation < 0.1
 
         // Get dominant colors by clustering (simplified - just take most distinct)
-        var dominantColors: [NSColor] = []
-        if !colors.isEmpty {
-            dominantColors.append(colors[0])
-            for color in colors {
-                var isDifferent = true
-                for dominant in dominantColors {
-                    if colorDistance(color, dominant) < 0.3 {
-                        isDifferent = false
-                        break
-                    }
-                }
-                if isDifferent && dominantColors.count < 5 {
-                    dominantColors.append(color)
-                }
+        var dominantColors: [NSColor] = [colors[0]]
+        for color in colors {
+            let isDifferent = dominantColors.allSatisfy { colorDistance(color, $0) >= 0.3 }
+            if isDifferent, dominantColors.count < 5 {
+                dominantColors.append(color)
             }
         }
 
@@ -578,10 +535,10 @@ class TechnicalAnalyzer: ObservableObject {
         let dg = g1 - g2
         let db = b1 - b2
 
-        return sqrt(dr*dr + dg*dg + db*db)
+        return sqrt(dr * dr + dg * dg + db * db)
     }
 
-    private func estimateDepthOfField(from image: CIImage, focusMap: FocusMap) -> DOFCharacteristics {
+    private func estimateDepthOfField(from _: CIImage, focusMap: FocusMap) -> DOFCharacteristics {
         // Estimate DOF based on blur patterns
         let isolation = focusMap.distribution == "center-weighted" ? 0.8 : 0.3
 
@@ -606,15 +563,15 @@ class TechnicalAnalyzer: ObservableObject {
         // Extract histogram data
         var histogramData = [Float](repeating: 0, count: 256 * 4) // 256 pixels * 4 channels
         ciContext.render(outputImage,
-                       toBitmap: &histogramData,
-                       rowBytes: 256 * 16, // 256 pixels * 16 bytes per pixel (4 floats * 4 bytes)
-                       bounds: CGRect(x: 0, y: 0, width: 256, height: 1),
-                       format: .RGBAf,
-                       colorSpace: nil)
+                         toBitmap: &histogramData,
+                         rowBytes: 256 * 16, // 256 pixels * 16 bytes per pixel (4 floats * 4 bytes)
+                         bounds: CGRect(x: 0, y: 0, width: 256, height: 1),
+                         format: .RGBAf,
+                         colorSpace: nil)
 
         // Extract just the red channel values (every 4th value)
         var result: [Int] = []
-        for i in 0..<256 {
+        for i in 0 ..< 256 {
             result.append(Int(histogramData[i * 4] * 1000))
         }
         return result
@@ -660,8 +617,9 @@ class TechnicalAnalyzer: ObservableObject {
 
         // Shallow DOF detection
         if metrics.sharpnessMap.distribution == "center-weighted" &&
-           metrics.sharpnessMap.sharpnessPercentage < 0.4 &&
-           metrics.depthOfField.subjectIsolation > 0.6 {
+            metrics.sharpnessMap.sharpnessPercentage < 0.4 &&
+            metrics.depthOfField.subjectIsolation > 0.6
+        {
             technique = .shallowDOF
             confidence = 0.8
             evidence.append("Strong center focus with blurred edges")
@@ -681,8 +639,9 @@ class TechnicalAnalyzer: ObservableObject {
 
         // Soft focus / Orton effect
         else if metrics.blurType == .gaussian &&
-                metrics.blurAmount > 0.3 &&
-                metrics.contrastRatio > 0.5 {
+            metrics.blurAmount > 0.3 &&
+            metrics.contrastRatio > 0.5
+        {
             technique = .ortonEffect
             confidence = 0.6
             evidence.append("Uniform softness with maintained contrast")
@@ -691,8 +650,9 @@ class TechnicalAnalyzer: ObservableObject {
 
         // Long exposure
         else if metrics.blurType == .motion &&
-                metrics.exposure.distribution == "balanced" &&
-                metrics.sharpnessMap.sharpnessPercentage > 0.5 {
+            metrics.exposure.distribution == "balanced" &&
+            metrics.sharpnessMap.sharpnessPercentage > 0.5
+        {
             technique = .longExposure
             confidence = 0.7
             evidence.append("Motion blur in specific regions only")

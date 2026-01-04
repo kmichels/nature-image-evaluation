@@ -118,6 +118,30 @@ final class EvaluationManager {
         apiService = AnthropicAPIService()
     }
 
+    /// Factory method to create EvaluationManager with saved user preferences
+    static func withSavedPreferences() -> EvaluationManager {
+        let manager = EvaluationManager()
+
+        // Load saved image resolution preference
+        let savedResolution = UserDefaults.standard.integer(forKey: "imageResolution")
+        if savedResolution > 0 {
+            manager.imageResolution = savedResolution
+        }
+
+        // Load saved rate limiting preferences
+        let savedDelay = UserDefaults.standard.double(forKey: "requestDelay")
+        if savedDelay > 0 {
+            manager.requestDelay = savedDelay
+        }
+
+        let savedBatchSize = UserDefaults.standard.integer(forKey: "maxBatchSize")
+        if savedBatchSize > 0 {
+            manager.maxBatchSize = savedBatchSize
+        }
+
+        return manager
+    }
+
     // MARK: - Public Methods
 
     /// Security-scoped folder URL for current evaluation session

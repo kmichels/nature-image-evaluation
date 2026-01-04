@@ -5,12 +5,12 @@
 //  Created by Claude on 11/13/25.
 //
 
-import Foundation
-import Vision
 import AppKit
+import Combine
 import CoreImage
 import CoreImage.CIFilterBuiltins
-import Combine
+import Foundation
+import Vision
 
 /// Analyzes images to generate saliency maps showing areas of visual attention
 @MainActor
@@ -39,16 +39,23 @@ class SaliencyAnalyzer: ObservableObject {
         }
     }
 
+    // MARK: - Image Conversion Helper
+
+    /// Convert NSImage to CGImage for Vision Framework
+    private func toCGImage(_ image: NSImage, setError: Bool = true) -> CGImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            if setError { lastError = SaliencyError.imageConversionFailed }
+            return nil
+        }
+        return cgImage
+    }
+
     /// Generate an attention-based saliency heatmap for the given image
     func generateSaliencyMap(for image: NSImage) async -> NSImage? {
         isProcessing = true
         defer { isProcessing = false }
 
-        // Convert NSImage to CGImage for Vision Framework
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            lastError = SaliencyError.imageConversionFailed
-            return nil
-        }
+        guard let cgImage = toCGImage(image) else { return nil }
 
         // Create Vision request for attention-based saliency
         let request = VNGenerateAttentionBasedSaliencyImageRequest()
@@ -80,10 +87,7 @@ class SaliencyAnalyzer: ObservableObject {
         isProcessing = true
         defer { isProcessing = false }
 
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            lastError = SaliencyError.imageConversionFailed
-            return (nil, nil)
-        }
+        guard let cgImage = toCGImage(image) else { return (nil, nil) }
 
         // Create both types of saliency requests
         let attentionRequest = VNGenerateAttentionBasedSaliencyImageRequest()
@@ -119,9 +123,9 @@ class SaliencyAnalyzer: ObservableObject {
 
     /// Create a heatmap overlay from saliency observation
     private func createHeatmapOverlay(from observation: VNSaliencyImageObservation,
-                                     originalImage: CGImage,
-                                     useBlueColormap: Bool = false) -> NSImage? {
-
+                                      originalImage: CGImage,
+                                      useBlueColormap: Bool = false) -> NSImage?
+    {
         // Get the saliency map as a pixelbuffer (non-optional property)
         let pixelBuffer = observation.pixelBuffer
 
@@ -179,7 +183,8 @@ class SaliencyAnalyzer: ObservableObject {
         let maps = await generateDualSaliencyMaps(for: image)
 
         guard let attentionMap = maps.attention,
-              let objectnessMap = maps.objectness else {
+              let objectnessMap = maps.objectness
+        else {
             return maps.attention ?? maps.objectness
         }
 
@@ -196,15 +201,15 @@ class SaliencyAnalyzer: ObservableObject {
 
         // Draw attention map first
         attention.draw(in: NSRect(origin: .zero, size: size),
-                      from: NSRect(origin: .zero, size: attention.size),
-                      operation: .sourceOver,
-                      fraction: 0.6)
+                       from: NSRect(origin: .zero, size: attention.size),
+                       operation: .sourceOver,
+                       fraction: 0.6)
 
         // Overlay objectness map with lower opacity
         objectness.draw(in: NSRect(origin: .zero, size: size),
-                       from: NSRect(origin: .zero, size: objectness.size),
-                       operation: .sourceOver,
-                       fraction: 0.4)
+                        from: NSRect(origin: .zero, size: objectness.size),
+                        operation: .sourceOver,
+                        fraction: 0.4)
 
         combinedImage.unlockFocus()
 
@@ -227,9 +232,7 @@ class SaliencyAnalyzer: ObservableObject {
 
     /// Generate saliency data for storage in Core Data
     func generateSaliencyDataForStorage(from image: NSImage) async -> SaliencyStorageData? {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return nil
-        }
+        guard let cgImage = toCGImage(image, setError: false) else { return nil }
 
         let request = VNGenerateAttentionBasedSaliencyImageRequest()
         let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
@@ -288,7 +291,8 @@ class SaliencyAnalyzer: ObservableObject {
         let nsImage = NSImage(cgImage: cgImage, size: targetSize)
         guard let tiffData = nsImage.tiffRepresentation,
               let bitmapRep = NSBitmapImageRep(data: tiffData),
-              let jpegData = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: 0.7]) else {
+              let jpegData = bitmapRep.representation(using: .jpeg, properties: [.compressionFactor: 0.7])
+        else {
             return nil
         }
 
@@ -384,9 +388,9 @@ class SaliencyAnalyzer: ObservableObject {
         let scaledImage = NSImage(size: originalImageSize)
         scaledImage.lockFocus()
         nsImage.draw(in: NSRect(origin: .zero, size: originalImageSize),
-                    from: NSRect(origin: .zero, size: nsImage.size),
-                    operation: .sourceOver,
-                    fraction: 1.0)
+                     from: NSRect(origin: .zero, size: nsImage.size),
+                     operation: .sourceOver,
+                     fraction: 1.0)
         scaledImage.unlockFocus()
 
         return scaledImage
