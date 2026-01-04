@@ -729,7 +729,9 @@ struct FolderGalleryView: View {
     }
 
     private func getProcessedImageURL(for id: UUID) -> URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            fatalError("Application Support directory not available")
+        }
         let appFolder = appSupport.appendingPathComponent("Nature Image Evaluation")
         let processedFolder = appFolder.appendingPathComponent("ProcessedImages")
         let imageFolder = processedFolder.appendingPathComponent(id.uuidString)

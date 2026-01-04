@@ -793,7 +793,9 @@ final class EvaluationManager {
     }
 
     private func getProcessedImageURL(for id: UUID) -> URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            fatalError("Application Support directory not available")
+        }
         let appFolder = appSupport.appendingPathComponent(Constants.appSupportFolder)
         let processedFolder = appFolder.appendingPathComponent(Constants.processedImagesFolder)
         let imageFolder = processedFolder.appendingPathComponent(id.uuidString)

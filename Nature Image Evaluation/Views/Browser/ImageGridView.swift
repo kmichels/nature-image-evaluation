@@ -86,9 +86,8 @@ struct ImageGridView: View {
     }
 
     private func handleDoubleTap(on url: URL) {
-        // Open in preview or start evaluation
-        print("Double-tap on \\(url.lastPathComponent)")
-        // TODO: Implement preview/evaluation trigger
+        // Double-tap opens the image in Quick Look / preview
+        NSWorkspace.shared.open(url)
     }
 
     private func handleKeyPress(_ press: KeyPress) -> KeyPress.Result {
@@ -131,9 +130,9 @@ struct ImageGridView: View {
         Divider()
 
         Button("Evaluate") {
-            // TODO: Trigger evaluation
-            print("Evaluate \\(url.lastPathComponent)")
+            // Evaluation is triggered from the main browser view
         }
+        .disabled(true)
 
         if viewModel.selectedURLs.count > 1 {
             Divider()
@@ -227,9 +226,9 @@ struct BrowserImageThumbnail: View {
 
             thumbnail.lockFocus()
             image.draw(in: NSRect(origin: .zero, size: targetSize),
-                      from: NSRect(origin: .zero, size: image.size),
-                      operation: .copy,
-                      fraction: 1.0)
+                       from: NSRect(origin: .zero, size: image.size),
+                       operation: .copy,
+                       fraction: 1.0)
             thumbnail.unlockFocus()
 
             await MainActor.run {
