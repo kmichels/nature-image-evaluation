@@ -6,9 +6,9 @@
 //  Pure SwiftUI approach - no NSViewRepresentable
 //
 
-import SwiftUI
-import Observation
 import CoreData
+import Observation
+import SwiftUI
 import UniformTypeIdentifiers
 
 @Observable
@@ -92,20 +92,20 @@ final class BrowserViewModel {
         // Load image URLs from folder
         let urls = await Task.detached(priority: .userInitiated) {
             // Run file system operations synchronously in detached task
-            return Self.findImageURLsStatic(in: url)
+            Self.findImageURLsStatic(in: url)
         }.value
 
         // Update UI on main actor
-        self.imageURLs = urls
-        self.applyFiltersAndSorting()
+        imageURLs = urls
+        applyFiltersAndSorting()
 
         // Clear selection when changing folders
-        self.selectedURLs.removeAll()
-        self.lastSelectedURL = nil
-        self.anchorURL = nil
+        selectedURLs.removeAll()
+        lastSelectedURL = nil
+        anchorURL = nil
 
         // Refresh evaluation cache for this folder
-        self.refreshEvaluationCache()
+        refreshEvaluationCache()
     }
 
     deinit {
@@ -133,7 +133,8 @@ final class BrowserViewModel {
                 let values = try url.resourceValues(forKeys: [.isRegularFileKey, .typeIdentifierKey])
                 if let isRegular = values.isRegularFile, isRegular,
                    let typeID = values.typeIdentifier,
-                   typeIdentifiers.contains(typeID) {
+                   typeIdentifiers.contains(typeID)
+                {
                     urls.append(url)
                 }
             } catch {
@@ -159,34 +160,34 @@ final class BrowserViewModel {
         case .name:
             filtered.sort { $0.lastPathComponent < $1.lastPathComponent }
         case .dateModified:
-            filtered.sort { (url1, url2) in
+            filtered.sort { url1, url2 in
                 let date1 = (try? url1.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? Date.distantPast
                 let date2 = (try? url2.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? Date.distantPast
                 return date1 > date2
             }
         case .size:
-            filtered.sort { (url1, url2) in
+            filtered.sort { url1, url2 in
                 let size1 = (try? url1.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
                 let size2 = (try? url2.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
                 return size1 > size2
             }
         case .score:
             // Sort by overall evaluation score if available
-            filtered.sort { (url1, url2) in
+            filtered.sort { url1, url2 in
                 let score1 = getEvaluationScore(for: url1) ?? -1
                 let score2 = getEvaluationScore(for: url2) ?? -1
                 return score1 > score2
             }
         case .artisticScore:
             // Sort by artistic score
-            filtered.sort { (url1, url2) in
+            filtered.sort { url1, url2 in
                 let score1 = getArtisticScore(for: url1) ?? -1
                 let score2 = getArtisticScore(for: url2) ?? -1
                 return score1 > score2
             }
         case .commercialScore:
             // Sort by commercial/sellability score
-            filtered.sort { (url1, url2) in
+            filtered.sort { url1, url2 in
                 let score1 = getCommercialScore(for: url1) ?? -1
                 let score2 = getCommercialScore(for: url2) ?? -1
                 return score1 > score2
@@ -222,7 +223,7 @@ final class BrowserViewModel {
         guard let startIndex = displayedURLs.firstIndex(of: start),
               let endIndex = displayedURLs.firstIndex(of: end) else { return }
 
-        let range = min(startIndex, endIndex)...max(startIndex, endIndex)
+        let range = min(startIndex, endIndex) ... max(startIndex, endIndex)
         let urlsInRange = range.map { displayedURLs[$0] }
 
         selectedURLs = Set(urlsInRange)
@@ -264,7 +265,7 @@ final class BrowserViewModel {
             newIndex = min(displayedURLs.count - 1, currentIndex + 1)
         }
 
-        if newIndex >= 0 && newIndex < displayedURLs.count {
+        if newIndex >= 0, newIndex < displayedURLs.count {
             let url = displayedURLs[newIndex]
             selectedURLs = [url]
             lastSelectedURL = url
@@ -302,8 +303,8 @@ final class BrowserViewModel {
         if thumbnailCache.count > 500 {
             // Remove oldest entries (simple FIFO for now)
             let toRemove = thumbnailCache.count - 400
-            thumbnailCache.keys.prefix(toRemove).forEach {
-                thumbnailCache.removeValue(forKey: $0)
+            for item in thumbnailCache.keys.prefix(toRemove) {
+                thumbnailCache.removeValue(forKey: item)
             }
         }
     }
@@ -327,7 +328,8 @@ final class BrowserViewModel {
             for eval in evaluations {
                 // Try to resolve original file path from bookmark
                 if let bookmarkData = eval.originalFilePath,
-                   let resolvedURL = resolveBookmark(bookmarkData) {
+                   let resolvedURL = resolveBookmark(bookmarkData)
+                {
                     evaluationCache[resolvedURL.path] = eval
                 }
             }
@@ -343,7 +345,10 @@ final class BrowserViewModel {
 
     /// Batch update cache for multiple URLs by fetching only those specific evaluations
     func updateEvaluationCache(for urls: [URL]) {
+        print("🔄 [\(timestamp())] updateEvaluationCache starting for \(urls.count) URLs...")
+
         // Refresh context to get latest data
+        print("🔄 [\(timestamp())] Refreshing context...")
         viewContext.refreshAllObjects()
 
         let urlPaths = Set(urls.map { $0.path })
@@ -354,17 +359,34 @@ final class BrowserViewModel {
         request.relationshipKeyPathsForPrefetching = ["currentEvaluation", "evaluationHistory"]
 
         do {
+            print("🔄 [\(timestamp())] Fetching evaluations...")
             let evaluations = try viewContext.fetch(request)
+            print("🔄 [\(timestamp())] Fetched \(evaluations.count) evaluations, resolving bookmarks...")
+
+            var matchCount = 0
             for eval in evaluations {
                 if let bookmarkData = eval.originalFilePath,
                    let resolvedURL = resolveBookmark(bookmarkData),
-                   urlPaths.contains(resolvedURL.path) {
+                   urlPaths.contains(resolvedURL.path)
+                {
                     evaluationCache[resolvedURL.path] = eval
+                    matchCount += 1
                 }
             }
+            print("🔄 [\(timestamp())] Cache updated with \(matchCount) matches")
         } catch {
             print("Error updating evaluation cache: \(error)")
         }
+    }
+
+    private static let timestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter
+    }()
+
+    private func timestamp() -> String {
+        Self.timestampFormatter.string(from: Date())
     }
 
     /// Resolve bookmark data to URL
@@ -399,35 +421,23 @@ final class BrowserViewModel {
         return evaluationCache[url.path]
     }
 
+    private func getEvaluationResult(for url: URL) -> EvaluationResult? {
+        evaluationCache[url.path]?.currentEvaluation
+    }
+
     func getEvaluationScore(for url: URL) -> Double? {
-        guard let eval = evaluationCache[url.path],
-              let result = eval.currentEvaluation else {
-            return nil
-        }
-        return result.overallWeightedScore
+        getEvaluationResult(for: url)?.overallWeightedScore
     }
 
     func getEvaluationPlacement(for url: URL) -> String? {
-        guard let eval = evaluationCache[url.path],
-              let result = eval.currentEvaluation else {
-            return nil
-        }
-        return result.primaryPlacement
+        getEvaluationResult(for: url)?.primaryPlacement
     }
 
     func getArtisticScore(for url: URL) -> Double? {
-        guard let eval = evaluationCache[url.path],
-              let result = eval.currentEvaluation else {
-            return nil
-        }
-        return result.artisticScore
+        getEvaluationResult(for: url)?.artisticScore
     }
 
     func getCommercialScore(for url: URL) -> Double? {
-        guard let eval = evaluationCache[url.path],
-              let result = eval.currentEvaluation else {
-            return nil
-        }
-        return result.sellabilityScore
+        getEvaluationResult(for: url)?.sellabilityScore
     }
 }

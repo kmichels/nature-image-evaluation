@@ -5,17 +5,16 @@
 //  Created by Claude Code on 10/27/25.
 //
 
-import Foundation
+import AppKit
 import CoreData
+import Foundation
 import Observation
 import os.log
-import AppKit
 
 /// Orchestrates the entire image evaluation workflow
 @MainActor
 @Observable
 final class EvaluationManager {
-
     // MARK: - Observable State
 
     /// Current processing state
@@ -108,15 +107,15 @@ final class EvaluationManager {
 
     init(persistenceController: PersistenceController) {
         self.persistenceController = persistenceController
-        self.viewContext = persistenceController.container.viewContext
-        self.apiService = AnthropicAPIService()
+        viewContext = persistenceController.container.viewContext
+        apiService = AnthropicAPIService()
     }
 
     // Convenience initializer that can only be called from MainActor context
     init() {
-        self.persistenceController = PersistenceController.shared
-        self.viewContext = persistenceController.container.viewContext
-        self.apiService = AnthropicAPIService()
+        persistenceController = PersistenceController.shared
+        viewContext = persistenceController.container.viewContext
+        apiService = AnthropicAPIService()
     }
 
     // MARK: - Public Methods
@@ -301,106 +300,12 @@ final class EvaluationManager {
 
         // Process in batches
         evaluationTask = Task {
-            for batchIndex in 0..<totalBatches {
-                guard !Task.isCancelled else { break }
-
-                currentBatch = batchIndex + 1
-                let startIndex = batchIndex * maxBatchSize
-                let endIndex = min(startIndex + maxBatchSize, evaluationQueue.count)
-                let batch = Array(evaluationQueue[startIndex..<endIndex])
-
-                statusMessage = "Processing batch \(currentBatch) of \(totalBatches)..."
-
-                for (index, imageEval) in batch.enumerated() {
-                    guard !Task.isCancelled else { break }
-
-                    currentImageIndex = startIndex + index + 1
-                    updateProgress()
-
-                    statusMessage = "Evaluating image \(currentImageIndex) of \(totalImages) (batch \(currentBatch)/\(totalBatches))..."
-
-                    do {
-                        try await evaluateImage(imageEval, prompt: prompt, apiKey: apiKey)
-                        successfulEvaluations += 1
-                    } catch {
-                        failedEvaluations += 1
-                        print("❌ Error evaluating image: \(error)")
-                        AppLogger.evaluation.error("❌ Error evaluating image: \(error.localizedDescription)")
-                        currentError = error
-
-                        // Check if it's a rate limit error
-                        if case APIError.rateLimitExceeded(let retryAfter) = error {
-                            let waitTime = retryAfter ?? Constants.rateLimitBackoffSeconds
-                            statusMessage = "Rate limit hit. Waiting \(Int(waitTime)) seconds..."
-                            try? await Task.sleep(nanoseconds: UInt64(waitTime * 1_000_000_000))
-
-                            // Retry the same image
-                            do {
-                                try await evaluateImage(imageEval, prompt: prompt, apiKey: apiKey)
-                                successfulEvaluations += 1
-                                failedEvaluations -= 1 // Correct the count since retry succeeded
-                            } catch {
-                                AppLogger.evaluation.warning("⚠️ Retry failed: \(error.localizedDescription)")
-                                currentError = error
-                                // Don't change failedEvaluations - it was already incremented for this image
-                                // Create failed evaluation record for tracking
-                                createFailedEvaluation(for: imageEval, error: error)
-                            }
-                        }
-                        // Check if it's an overloaded error
-                        else if case APIError.providerSpecificError(let message) = error,
-                                message.lowercased().contains("overloaded") {
-                            // Wait longer for overloaded errors
-                            let waitTime: TimeInterval = 60.0 // Wait 60 seconds
-                            statusMessage = "API service overloaded. Waiting \(Int(waitTime)) seconds..."
-
-                            // Retry with exponential backoff up to the configured limit
-                            var retryCount = 0
-                            let maxRetries = Constants.maxNetworkRetries
-
-                            while retryCount < maxRetries {
-                                let backoffTime = waitTime * pow(2.0, Double(retryCount))
-                                statusMessage = "API overloaded. Retry \(retryCount + 1)/\(maxRetries) in \(Int(backoffTime)) seconds..."
-                                try? await Task.sleep(nanoseconds: UInt64(backoffTime * 1_000_000_000))
-
-                                do {
-                                    try await evaluateImage(imageEval, prompt: prompt, apiKey: apiKey)
-                                    successfulEvaluations += 1
-                                    failedEvaluations -= 1 // Correct the count
-                                    statusMessage = "Retry successful. Continuing..."
-                                    break
-                                } catch {
-                                    retryCount += 1
-                                    print("Retry \(retryCount) failed: \(error)")
-                                    if retryCount == maxRetries {
-                                        statusMessage = "Failed after \(maxRetries) retries. Skipping image."
-                                        // Create failed evaluation record
-                                        createFailedEvaluation(for: imageEval, error: error)
-                                    }
-                                }
-                            }
-                        }
-                        // For other errors, mark as failed immediately
-                        else {
-                            // Create failed evaluation record in history
-                            createFailedEvaluation(for: imageEval, error: error)
-                            statusMessage = "Evaluation failed: \(error.localizedDescription)"
-                        }
-                    }
-
-                    // Apply rate limit delay (except for last image)
-                    if index < batch.count - 1 || batchIndex < totalBatches - 1 {
-                        statusMessage = "Waiting \(Int(requestDelay)) seconds before next request..."
-                        try? await Task.sleep(nanoseconds: UInt64(requestDelay * 1_000_000_000))
-                    }
-                }
-            }
-
-            // Evaluation complete
-            await MainActor.run {
-                completeEvaluation()
-            }
+            await processAllBatches(prompt: prompt, apiKey: apiKey)
+            await MainActor.run { completeEvaluation() }
         }
+
+        // Wait for the evaluation task to complete before returning
+        await evaluationTask?.value
     }
 
     /// Cancel current evaluation
@@ -440,12 +345,116 @@ final class EvaluationManager {
         }
     }
 
+    // MARK: - Batch Processing
+
+    private func processAllBatches(prompt: String, apiKey: String) async {
+        for batchIndex in 0 ..< totalBatches {
+            guard !Task.isCancelled else { break }
+            await processBatch(index: batchIndex, prompt: prompt, apiKey: apiKey)
+        }
+    }
+
+    private func processBatch(index batchIndex: Int, prompt: String, apiKey: String) async {
+        currentBatch = batchIndex + 1
+        let startIndex = batchIndex * maxBatchSize
+        let endIndex = min(startIndex + maxBatchSize, evaluationQueue.count)
+        let batch = Array(evaluationQueue[startIndex ..< endIndex])
+
+        statusMessage = "Processing batch \(currentBatch) of \(totalBatches)..."
+
+        for (index, imageEval) in batch.enumerated() {
+            guard !Task.isCancelled else { break }
+
+            currentImageIndex = startIndex + index + 1
+            updateProgress()
+            statusMessage = "Evaluating image \(currentImageIndex) of \(totalImages) (batch \(currentBatch)/\(totalBatches))..."
+
+            await processImageWithRetry(imageEval, prompt: prompt, apiKey: apiKey)
+
+            // Apply rate limit delay (except for last image in last batch)
+            let isLastImage = index == batch.count - 1 && batchIndex == totalBatches - 1
+            if !isLastImage {
+                statusMessage = "Waiting \(Int(requestDelay)) seconds before next request..."
+                try? await Task.sleep(nanoseconds: UInt64(requestDelay * 1_000_000_000))
+            }
+        }
+    }
+
+    private func processImageWithRetry(_ imageEval: ImageEvaluation, prompt: String, apiKey: String) async {
+        do {
+            try await evaluateImage(imageEval, prompt: prompt, apiKey: apiKey)
+            successfulEvaluations += 1
+        } catch {
+            failedEvaluations += 1
+            print("❌ Error evaluating image: \(error)")
+            AppLogger.evaluation.error("❌ Error evaluating image: \(error.localizedDescription)")
+            currentError = error
+
+            await handleEvaluationError(error, for: imageEval, prompt: prompt, apiKey: apiKey)
+        }
+    }
+
+    private func handleEvaluationError(_ error: Error, for imageEval: ImageEvaluation, prompt: String, apiKey: String) async {
+        if case let APIError.rateLimitExceeded(retryAfter) = error {
+            await handleRateLimitError(retryAfter: retryAfter, for: imageEval, prompt: prompt, apiKey: apiKey)
+        } else if case let APIError.providerSpecificError(message) = error,
+                  message.lowercased().contains("overloaded")
+        {
+            await handleOverloadedError(for: imageEval, prompt: prompt, apiKey: apiKey)
+        } else {
+            createFailedEvaluation(for: imageEval, error: error)
+            statusMessage = "Evaluation failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func handleRateLimitError(retryAfter: TimeInterval?, for imageEval: ImageEvaluation, prompt: String, apiKey: String) async {
+        let waitTime = retryAfter ?? Constants.rateLimitBackoffSeconds
+        statusMessage = "Rate limit hit. Waiting \(Int(waitTime)) seconds..."
+        try? await Task.sleep(nanoseconds: UInt64(waitTime * 1_000_000_000))
+
+        do {
+            try await evaluateImage(imageEval, prompt: prompt, apiKey: apiKey)
+            successfulEvaluations += 1
+            failedEvaluations -= 1
+        } catch {
+            AppLogger.evaluation.warning("⚠️ Retry failed: \(error.localizedDescription)")
+            currentError = error
+            createFailedEvaluation(for: imageEval, error: error)
+        }
+    }
+
+    private func handleOverloadedError(for imageEval: ImageEvaluation, prompt: String, apiKey: String) async {
+        let baseWaitTime: TimeInterval = 60.0
+        let maxRetries = Constants.maxNetworkRetries
+
+        for retryCount in 0 ..< maxRetries {
+            let backoffTime = baseWaitTime * pow(2.0, Double(retryCount))
+            statusMessage = "API overloaded. Retry \(retryCount + 1)/\(maxRetries) in \(Int(backoffTime)) seconds..."
+            try? await Task.sleep(nanoseconds: UInt64(backoffTime * 1_000_000_000))
+
+            do {
+                try await evaluateImage(imageEval, prompt: prompt, apiKey: apiKey)
+                successfulEvaluations += 1
+                failedEvaluations -= 1
+                statusMessage = "Retry successful. Continuing..."
+                return
+            } catch {
+                print("Retry \(retryCount + 1) failed: \(error)")
+                if retryCount == maxRetries - 1 {
+                    statusMessage = "Failed after \(maxRetries) retries. Skipping image."
+                    createFailedEvaluation(for: imageEval, error: error)
+                }
+            }
+        }
+    }
+
     // MARK: - Private Methods
 
     private func evaluateImage(_ imageEval: ImageEvaluation, prompt: String, apiKey: String) async throws {
         // Load processed image
         guard let processedPath = imageEval.processedFilePath,
-              let processedImage = NSImage(contentsOfFile: processedPath) else {
+              let processedImage = NSImage(contentsOfFile: processedPath)
+        else {
             throw EvaluationError.processedImageNotFound
         }
 
@@ -491,16 +500,43 @@ final class EvaluationManager {
             model: currentProvider.model
         )
 
-        print("📊 Evaluation complete - Score: \(response.overallWeightedScore), Placement: \(response.primaryPlacement)")
+        print("📊 [\(timestamp())] AI response received - Score: \(response.overallWeightedScore), Placement: \(response.primaryPlacement)")
 
         // Store the evaluation with technical metrics and saliency
+        print("💾 [\(timestamp())] Starting storeEvaluationResult...")
         try storeEvaluationResult(
             for: imageEval,
             response: response,
             technicalAnalysis: technicalAnalysis,
             saliencyData: saliencyData
         )
+        print("💾 [\(timestamp())] storeEvaluationResult complete")
     }
+
+    // MARK: - Cached Formatters
+
+    private static let timestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter
+    }()
+
+    private func timestamp() -> String {
+        Self.timestampFormatter.string(from: Date())
+    }
+
+    // MARK: - Geometry Helpers
+
+    private func rectToDict(_ rect: CGRect) -> [String: Double] {
+        ["x": Double(rect.origin.x), "y": Double(rect.origin.y),
+         "width": Double(rect.size.width), "height": Double(rect.size.height)]
+    }
+
+    private func pointToDict(_ point: CGPoint) -> [String: Double] {
+        ["x": Double(point.x), "y": Double(point.y)]
+    }
+
+    // MARK: - Evaluation Result Storage
 
     private func storeEvaluationResult(
         for imageEval: ImageEvaluation,
@@ -508,16 +544,34 @@ final class EvaluationManager {
         technicalAnalysis: TechnicalAnalysisResult,
         saliencyData: SaliencyStorageData?
     ) throws {
-        // Check if this is a re-evaluation
         let previousResult = imageEval.currentEvaluation
         let isReEvaluation = previousResult != nil
 
-        // Create NEW evaluation result
         let result = EvaluationResult(context: viewContext)
         result.id = UUID()
         result.evaluationDate = Date()
 
-        // Set scores from response
+        populateScores(result, from: response)
+        populateCommercialMetadata(result, from: response)
+        populateTechnicalMetrics(result, from: technicalAnalysis)
+        populateSaliencyData(result, from: saliencyData)
+        populateAPIUsage(result, from: response)
+        configureProviderMetadata(result, for: imageEval, source: isReEvaluation ? "re-evaluation" : "manual", status: "completed")
+
+        result.estimatedCost = apiService.calculateCost(inputTokens: response.inputTokens, outputTokens: response.outputTokens)
+
+        linkResultToImageEvaluation(result, imageEval: imageEval)
+        linkResultToSession(result)
+
+        if isReEvaluation {
+            print("Re-evaluated image, previous score: \(previousResult?.overallWeightedScore ?? 0), new score: \(result.overallWeightedScore)")
+        }
+
+        updateAPIStats(inputTokens: response.inputTokens, outputTokens: response.outputTokens, cost: result.estimatedCost)
+        try viewContext.save()
+    }
+
+    private func populateScores(_ result: EvaluationResult, from response: EvaluationResponse) {
         result.compositionScore = response.compositionScore
         result.qualityScore = response.qualityScore
         result.sellabilityScore = response.sellabilityScore
@@ -530,8 +584,9 @@ final class EvaluationManager {
         result.technicalInnovations = response.technicalInnovations
         result.printSizeRecommendation = response.printSizeRecommendation
         result.priceTierSuggestion = response.priceTierSuggestion
+    }
 
-        // Store commercial metadata if present (for STORE or BOTH placement)
+    private func populateCommercialMetadata(_ result: EvaluationResult, from response: EvaluationResponse) {
         result.title = response.title
         result.descriptionText = response.descriptionText
         result.keywords = response.keywords
@@ -539,90 +594,64 @@ final class EvaluationManager {
         result.suggestedCategories = response.suggestedCategories
         result.bestUseCases = response.bestUseCases
         result.suggestedPriceTier = response.suggestedPriceTier
+    }
 
-        // Store technical metrics from Core Image analysis
-        result.technicalSharpness = technicalAnalysis.metrics.sharpnessScore
-        result.technicalBlurType = technicalAnalysis.metrics.blurType.rawValue
-        result.technicalBlurAmount = technicalAnalysis.metrics.blurAmount
-        result.technicalFocusDistribution = technicalAnalysis.metrics.sharpnessMap.distribution
-        result.technicalNoiseLevel = technicalAnalysis.metrics.noiseLevel
-        result.technicalContrast = technicalAnalysis.metrics.contrastRatio
-        result.technicalExposure = technicalAnalysis.metrics.exposure.distribution
-        result.technicalArtisticTechnique = technicalAnalysis.intent.probableTechnique.rawValue
-        result.technicalIntentConfidence = technicalAnalysis.intent.confidence
+    private func populateTechnicalMetrics(_ result: EvaluationResult, from analysis: TechnicalAnalysisResult) {
+        result.technicalSharpness = analysis.metrics.sharpnessScore
+        result.technicalBlurType = analysis.metrics.blurType.rawValue
+        result.technicalBlurAmount = analysis.metrics.blurAmount
+        result.technicalFocusDistribution = analysis.metrics.sharpnessMap.distribution
+        result.technicalNoiseLevel = analysis.metrics.noiseLevel
+        result.technicalContrast = analysis.metrics.contrastRatio
+        result.technicalExposure = analysis.metrics.exposure.distribution
+        result.technicalArtisticTechnique = analysis.intent.probableTechnique.rawValue
+        result.technicalIntentConfidence = analysis.intent.confidence
+    }
 
-        // Store saliency analysis data from Vision Framework
-        if let saliencyData = saliencyData {
-            result.saliencyMapData = saliencyData.mapData
-            result.saliencyCompositionPattern = saliencyData.compositionPattern
-            result.saliencyAnalysisDate = Date()
+    private func populateSaliencyData(_ result: EvaluationResult, from saliencyData: SaliencyStorageData?) {
+        guard let saliencyData = saliencyData else { return }
 
-            // Convert CGRect array to dictionary array for storage
-            result.saliencyHotspots = saliencyData.hotspots.map { rect in
-                [
-                    "x": Double(rect.origin.x),
-                    "y": Double(rect.origin.y),
-                    "width": Double(rect.size.width),
-                    "height": Double(rect.size.height)
-                ]
-            }
+        result.saliencyMapData = saliencyData.mapData
+        result.saliencyCompositionPattern = saliencyData.compositionPattern
+        result.saliencyAnalysisDate = Date()
+        result.saliencyHotspots = saliencyData.hotspots.map { rectToDict($0) }
 
-            // Store highest point if available
-            if let highestPoint = saliencyData.highestPoint {
-                result.saliencyHighestPoint = [
-                    "x": Double(highestPoint.x),
-                    "y": Double(highestPoint.y)
-                ]
-            }
-
-            // Store center of mass if available
-            if let centerOfMass = saliencyData.centerOfMass {
-                result.saliencyCenterOfMass = [
-                    "x": Double(centerOfMass.x),
-                    "y": Double(centerOfMass.y)
-                ]
-            }
+        if let highestPoint = saliencyData.highestPoint {
+            result.saliencyHighestPoint = pointToDict(highestPoint)
         }
+        if let centerOfMass = saliencyData.centerOfMass {
+            result.saliencyCenterOfMass = pointToDict(centerOfMass)
+        }
+    }
 
-
-        // API usage
+    private func populateAPIUsage(_ result: EvaluationResult, from response: EvaluationResponse) {
         result.inputTokens = Int32(response.inputTokens)
         result.outputTokens = Int32(response.outputTokens)
         result.rawAIResponse = response.rawResponse
+    }
 
-        // Set provider metadata
+    private func configureProviderMetadata(_ result: EvaluationResult, for imageEval: ImageEvaluation, source: String, status: String) {
         result.provider = currentProvider.identifier
         result.modelIdentifier = currentProvider.model
         result.modelDisplayName = currentProvider.displayName
         result.apiVersion = currentProvider.apiVersion
-        result.evaluationSource = isReEvaluation ? "re-evaluation" : "manual"
+        result.evaluationSource = source
         result.promptVersion = "v1.0"
         result.imageResolution = Int32(imageResolution)
-        result.evaluationStatus = "completed"
+        result.evaluationStatus = status
         result.evaluationIndex = imageEval.evaluationCount + 1
+    }
 
-        // Calculate cost
-        result.estimatedCost = apiService.calculateCost(
-            inputTokens: response.inputTokens,
-            outputTokens: response.outputTokens
-        )
-
-        // Update image evaluation with history support
+    private func linkResultToImageEvaluation(_ result: EvaluationResult, imageEval: ImageEvaluation) {
         if let previous = imageEval.currentEvaluation {
             previous.isCurrentEvaluation = false
         }
         result.isCurrentEvaluation = true
 
-        // Add to history using type-safe Core Data methods
-        if imageEval.evaluationHistory == nil {
-            imageEval.evaluationHistory = NSSet()
-        }
-        // Create mutable copy for safe manipulation
         let currentHistory = imageEval.evaluationHistory?.mutableCopy() as? NSMutableSet ?? NSMutableSet()
         currentHistory.add(result)
         imageEval.evaluationHistory = currentHistory.copy() as? NSSet
 
-        // Set as current
         result.imageEvaluation = imageEval
         imageEval.currentEvaluation = result
         imageEval.dateLastEvaluated = Date()
@@ -631,26 +660,15 @@ final class EvaluationManager {
         if imageEval.firstEvaluatedDate == nil {
             imageEval.firstEvaluatedDate = Date()
         }
+    }
 
-        // Link to session using type-safe methods
-        if let session = currentSession {
-            result.session = session
-            // Create mutable copy for safe manipulation
-            let currentEvaluations = session.evaluations?.mutableCopy() as? NSMutableSet ?? NSMutableSet()
-            currentEvaluations.add(result)
-            session.evaluations = currentEvaluations.copy() as? NSSet
-        }
+    private func linkResultToSession(_ result: EvaluationResult) {
+        guard let session = currentSession else { return }
 
-        // Log if this is a re-evaluation
-        if isReEvaluation {
-            print("Re-evaluated image, previous score: \(previousResult?.overallWeightedScore ?? 0), new score: \(result.overallWeightedScore)")
-        }
-
-        // Update API usage stats
-        updateAPIStats(inputTokens: response.inputTokens, outputTokens: response.outputTokens, cost: result.estimatedCost)
-
-        // Save context
-        try viewContext.save()
+        result.session = session
+        let currentEvaluations = session.evaluations?.mutableCopy() as? NSMutableSet ?? NSMutableSet()
+        currentEvaluations.add(result)
+        session.evaluations = currentEvaluations.copy() as? NSSet
     }
 
     private func updateProgress() {
@@ -810,74 +828,37 @@ final class EvaluationManager {
         let result = EvaluationResult(context: viewContext)
         result.id = UUID()
         result.evaluationDate = Date()
-
-        // Mark as failed with error details
-        result.evaluationStatus = "failed"
         result.errorMessage = error.localizedDescription
 
-        if case APIError.providerSpecificError(let message) = error {
+        if case let APIError.providerSpecificError(message) = error {
             result.errorCode = message
         }
 
-        // Set provider metadata
-        result.provider = currentProvider.identifier
-        result.modelIdentifier = currentProvider.model
-        result.modelDisplayName = currentProvider.displayName
-        result.apiVersion = currentProvider.apiVersion
-        result.evaluationSource = parentEvaluation != nil ? "retry" : "manual"
-        result.promptVersion = "v1.0"
-        result.imageResolution = Int32(imageResolution)
-        result.evaluationIndex = imageEval.evaluationCount + 1
+        let source = parentEvaluation != nil ? "retry" : "manual"
+        configureProviderMetadata(result, for: imageEval, source: source, status: "failed")
 
         if let parent = parentEvaluation {
             result.parentEvaluationID = parent.id
             result.retryCount = parent.retryCount + 1
         }
 
-        // Add to history
-        if imageEval.evaluationHistory == nil {
-            imageEval.evaluationHistory = NSSet()
-        }
-        // Use mutableSetValue for Core Data relationship manipulation
+        // Add to history but don't set as current if successful evaluation exists
         let history = imageEval.mutableSetValue(forKey: "evaluationHistory")
         history.add(result)
 
-        // Don't set as current if a successful evaluation exists
         if imageEval.currentEvaluation == nil {
             imageEval.currentEvaluation = result
         }
 
         imageEval.dateLastEvaluated = Date()
-        imageEval.evaluationCount = imageEval.evaluationCount + 1
+        imageEval.evaluationCount += 1
 
         if imageEval.firstEvaluatedDate == nil {
             imageEval.firstEvaluatedDate = Date()
         }
 
-        // Link to session using type-safe methods
-        if let session = currentSession {
-            result.session = session
-            // Create mutable copy for safe manipulation
-            let currentEvaluations = session.evaluations?.mutableCopy() as? NSMutableSet ?? NSMutableSet()
-            currentEvaluations.add(result)
-            session.evaluations = currentEvaluations.copy() as? NSSet
-        }
-
+        linkResultToSession(result)
         try? viewContext.save()
-    }
-
-    // PLACEHOLDER: Provider switching logic
-    private func shouldSwitchProvider(consecutiveFailures: Int) -> Bool {
-        // TODO: Implement provider switching logic
-        // For MVP, always return false
-        return false
-    }
-
-    // PLACEHOLDER: Get next provider in fallback chain
-    private func getNextProvider() -> ProviderInfo? {
-        // TODO: Implement provider fallback chain
-        // For MVP, return nil (no fallback)
-        return nil
     }
 }
 

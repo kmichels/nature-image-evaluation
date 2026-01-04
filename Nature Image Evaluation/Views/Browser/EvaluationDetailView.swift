@@ -18,6 +18,24 @@ struct EvaluationDetailView: View {
         evaluation?.currentEvaluation
     }
 
+    private static let timestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter
+    }()
+
+    private static func timestamp() -> String {
+        timestampFormatter.string(from: Date())
+    }
+
+    init(url: URL, evaluation: ImageEvaluation?) {
+        self.url = url
+        self.evaluation = evaluation
+        #if DEBUG
+            print("📋 [\(Self.timestamp())] EvaluationDetailView init - evaluation: \(evaluation != nil ? "present" : "nil"), result: \(evaluation?.currentEvaluation != nil ? "present" : "nil")")
+        #endif
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar
@@ -60,6 +78,14 @@ struct EvaluationDetailView: View {
         .task {
             await loadImage()
         }
+        #if DEBUG
+        .onAppear {
+                print("📋 [\(Self.timestamp())] EvaluationDetailView onAppear - has result: \(result != nil)")
+                if let r = result {
+                    print("📋 [\(Self.timestamp())] Result data: score=\(r.overallWeightedScore), placement=\(r.primaryPlacement ?? "nil")")
+                }
+            }
+        #endif
     }
 
     // MARK: - Image Panel
@@ -206,52 +232,45 @@ struct EvaluationDetailView: View {
     @ViewBuilder
     private func feedbackSection(_ result: EvaluationResult) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Strengths
-            if let strengths = result.strengths, !strengths.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Strengths", systemImage: "checkmark.circle.fill")
-                        .font(.headline)
-                        .foregroundColor(.green)
-
-                    ForEach(strengths, id: \.self) { strength in
-                        HStack(alignment: .top, spacing: 8) {
-                            Text("•")
-                                .foregroundColor(.green)
-                            Text(strength)
-                                .font(.callout)
-                        }
-                    }
-                }
-            }
-
-            // Improvements
-            if let improvements = result.improvements, !improvements.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Areas for Improvement", systemImage: "arrow.up.circle.fill")
-                        .font(.headline)
-                        .foregroundColor(.orange)
-
-                    ForEach(improvements, id: \.self) { improvement in
-                        HStack(alignment: .top, spacing: 8) {
-                            Text("•")
-                                .foregroundColor(.orange)
-                            Text(improvement)
-                                .font(.callout)
-                        }
-                    }
-                }
-            }
-
-            // Market comparison
+            feedbackList(
+                title: "Strengths",
+                icon: "checkmark.circle.fill",
+                color: .green,
+                items: result.strengths
+            )
+            feedbackList(
+                title: "Areas for Improvement",
+                icon: "arrow.up.circle.fill",
+                color: .orange,
+                items: result.improvements
+            )
             if let marketComparison = result.marketComparison, !marketComparison.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Market Comparison", systemImage: "chart.bar.fill")
                         .font(.headline)
                         .foregroundColor(.blue)
-
                     Text(marketComparison)
                         .font(.callout)
                         .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func feedbackList(title: String, icon: String, color: Color, items: [String]?) -> some View {
+        if let items = items, !items.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(title, systemImage: icon)
+                    .font(.headline)
+                    .foregroundColor(color)
+                ForEach(items, id: \.self) { item in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("•")
+                            .foregroundColor(color)
+                        Text(item)
+                            .font(.callout)
+                    }
                 }
             }
         }
@@ -319,7 +338,7 @@ struct EvaluationDetailView: View {
 
             LazyVGrid(columns: [
                 GridItem(.flexible()),
-                GridItem(.flexible())
+                GridItem(.flexible()),
             ], spacing: 8) {
                 TechnicalMetric(label: "Sharpness", value: String(format: "%.1f", result.technicalSharpness))
                 TechnicalMetric(label: "Blur Type", value: result.technicalBlurType ?? "None")
@@ -368,8 +387,8 @@ struct EvaluationDetailView: View {
     private func scoreColor(_ score: Double) -> Color {
         switch score {
         case 8.0...: return .green
-        case 6.0..<8.0: return .blue
-        case 4.0..<6.0: return .orange
+        case 6.0 ..< 8.0: return .blue
+        case 4.0 ..< 6.0: return .orange
         default: return .red
         }
     }
@@ -405,8 +424,8 @@ struct ScoreBar: View {
     private var color: Color {
         switch score {
         case 8.0...: return .green
-        case 6.0..<8.0: return .blue
-        case 4.0..<6.0: return .orange
+        case 6.0 ..< 8.0: return .blue
+        case 4.0 ..< 6.0: return .orange
         default: return .red
         }
     }
@@ -465,17 +484,17 @@ struct TechnicalMetric: View {
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
         let result = FlowResult(in: proposal.width ?? 0, subviews: subviews, spacing: spacing)
         return result.size
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
         let result = FlowResult(in: bounds.width, subviews: subviews, spacing: spacing)
         for (index, subview) in subviews.enumerated() {
             subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x,
                                       y: bounds.minY + result.positions[index].y),
-                         proposal: .unspecified)
+                          proposal: .unspecified)
         }
     }
 
@@ -491,7 +510,7 @@ struct FlowLayout: Layout {
             for subview in subviews {
                 let size = subview.sizeThatFits(.unspecified)
 
-                if x + size.width > width && x > 0 {
+                if x + size.width > width, x > 0 {
                     x = 0
                     y += rowHeight + spacing
                     rowHeight = 0
@@ -504,7 +523,7 @@ struct FlowLayout: Layout {
                 self.size.width = max(self.size.width, x)
             }
 
-            self.size.height = y + rowHeight
+            size.height = y + rowHeight
         }
     }
 }
